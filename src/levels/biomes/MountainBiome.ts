@@ -7,7 +7,7 @@ export class MountainBiome extends Biome {
   private readonly MAX_HEIGHT = 30;
   private readonly PEAK_COUNT = 5;
 
-  generate(): void {
+  protected generateTerrain(): void {
     this.generateHeightMap();
     this.createTerrain();
     this.addRocks();
@@ -31,10 +31,13 @@ export class MountainBiome extends Biome {
         const x = i / (this.GRID_SIZE - 1);
         const z = j / (this.GRID_SIZE - 1);
         
-        // Calculate raw mountain height
+        // Calculate world space coordinates
+        const worldX = this.position.x - this.size.x/2 + x * this.size.x;
+        const worldZ = this.position.y - this.size.y/2 + z * this.size.y;
+        
+        // Calculate raw height
         let height = Biome.BASE_HEIGHT;
         let mountainHeight = 0;
-        
         peaks.forEach(peak => {
           const distance = Math.sqrt(
             Math.pow(x - peak.x, 2) + 
@@ -43,14 +46,11 @@ export class MountainBiome extends Biome {
           mountainHeight += peak.height * Math.max(0, 1 - distance * 2);
         });
 
-        // Add terrain detail
         const detail = (this.noise(x * 8, z * 8) + 1) * 1.5;
         height += mountainHeight + detail;
 
-        // Normalize height at edges
-        const worldX = this.position.x - this.size.x/2 + x * this.size.x;
-        const worldZ = this.position.y - this.size.y/2 + z * this.size.y;
-        this.heightMap[i][j] = this.normalizeEdgeHeight(height, worldX, worldZ);
+        // Blend with base height at edges
+        this.heightMap[i][j] = this.blendHeightWithEdge(worldX, worldZ, height);
       }
     }
   }
@@ -106,44 +106,31 @@ export class MountainBiome extends Biome {
   }
 
   private addRocks() {
-    // Add scattered rocks on steep slopes
-    for (let i = 0; i < 100; i++) {
-      const x = Math.random() * this.size.x - this.size.x/2;
-      const z = Math.random() * this.size.y - this.size.y/2;
-      const height = this.getGroundHeight(new THREE.Vector3(
-        this.position.x + x,
-        0,
-        this.position.y + z
-      ));
-
+    // Reduced rock count
+    const rockCount = Math.floor((this.size.x * this.size.y) / 2000); // Was ~100
+    
+    for (let i = 0; i < rockCount; i++) {
+      const x = this.position.x - this.size.x/2 + Math.random() * this.size.x;
+      const z = this.position.y - this.size.y/2 + Math.random() * this.size.y;
+      const position = new THREE.Vector3(x, 0, z);
+      
+      // Only place rocks on steeper terrain
+      const height = this.getGroundHeight(position);
       if (height > this.MAX_HEIGHT * 0.4) {
-        this.createRock(new THREE.Vector3(
-          this.position.x + x,
-          height,
-          this.position.y + z
-        ));
+        this.createRock(position);
       }
     }
   }
 
   private createRock(position: THREE.Vector3) {
-    const geometry = new THREE.DodecahedronGeometry(
-      1 + Math.random() * 2,
-      0
-    );
+    const geometry = new THREE.DodecahedronGeometry(1 + Math.random() * 2, 0);
     const material = new THREE.MeshStandardMaterial({
       color: 0x808080,
       roughness: 0.9,
     });
     const rock = new THREE.Mesh(geometry, material);
-    rock.position.copy(position);
-    rock.rotation.set(
-      Math.random() * Math.PI,
-      Math.random() * Math.PI,
-      Math.random() * Math.PI
-    );
     rock.castShadow = true;
-    this.scene.add(rock);
+    this.addGroundedObject(rock, position, 0);
   }
 
   override getGroundHeight(position: THREE.Vector3): number {

@@ -5,7 +5,7 @@ export class DesertBiome extends Biome {
   private heightMap: number[][] = [];
   private readonly GRID_SIZE = 100;
 
-  generate(): void {
+  protected generateTerrain(): void {
     this.generateHeightMap();
     this.createDesertTerrain();
     this.addCacti();
@@ -15,16 +15,18 @@ export class DesertBiome extends Biome {
     for (let i = 0; i < this.GRID_SIZE; i++) {
       this.heightMap[i] = [];
       for (let j = 0; j < this.GRID_SIZE; j++) {
-        const x = (i / this.GRID_SIZE) * 6;
-        const y = (j / this.GRID_SIZE) * 6;
-        
+        const x = i / (this.GRID_SIZE - 1);
+        const z = j / (this.GRID_SIZE - 1);
+
+        // Calculate world space coordinates
+        const worldX = this.position.x - this.size.x/2 + x * this.size.x;
+        const worldZ = this.position.y - this.size.y/2 + z * this.size.y;
+
         // Calculate raw dune height
-        const rawHeight = this.noise(x, y) * 3;
-        
-        // Normalize height at edges
-        const worldX = this.position.x - this.size.x/2 + (i / this.GRID_SIZE) * this.size.x;
-        const worldZ = this.position.y - this.size.y/2 + (j / this.GRID_SIZE) * this.size.y;
-        this.heightMap[i][j] = this.normalizeEdgeHeight(rawHeight, worldX, worldZ);
+        const rawHeight = this.noise(x * 6, z * 6) * 3; // Gentle sand dunes
+
+        // Blend with base height at edges
+        this.heightMap[i][j] = this.blendHeightWithEdge(worldX, worldZ, rawHeight);
       }
     }
   }
@@ -53,17 +55,18 @@ export class DesertBiome extends Biome {
     terrain.rotation.x = -Math.PI / 2;
     terrain.position.set(this.position.x, 0, this.position.y);
     terrain.receiveShadow = true;
-    this.scene.add(terrain);
+    this.addObject(terrain);
   }
 
   private addCacti() {
-    const cactiCount = Math.floor((this.size.x * this.size.y) / 400); // Sparse distribution
+    // Significantly reduced cactus count
+    const cactiCount = Math.floor((this.size.x * this.size.y) / 2000); // Was 400
     
     for (let i = 0; i < cactiCount; i++) {
       const x = this.position.x - this.size.x/2 + Math.random() * this.size.x;
       const z = this.position.y - this.size.y/2 + Math.random() * this.size.y;
-      const height = this.getGroundHeight(new THREE.Vector3(x, 0, z));
-      this.createCactus(new THREE.Vector3(x, height, z));
+      const position = new THREE.Vector3(x, 0, z);
+      this.createCactus(position);
     }
   }
 
@@ -102,8 +105,8 @@ export class DesertBiome extends Biome {
       cactus.add(arm);
     }
 
-    cactus.position.copy(position);
-    this.scene.add(cactus);
+    // Place cactus with base at ground level
+    this.addGroundedObject(cactus, position, 0);
   }
 
   private noise(x: number, y: number): number {
@@ -113,28 +116,11 @@ export class DesertBiome extends Biome {
   }
 
   override getGroundHeight(position: THREE.Vector3): number {
-    const localX = position.x - (this.position.x - this.size.x/2);
-    const localZ = position.z - (this.position.y - this.size.y/2);
+    const x = Math.floor(((position.x - (this.position.x - this.size.x/2)) / this.size.x) * (this.GRID_SIZE - 1));
+    const z = Math.floor(((position.z - (this.position.y - this.size.y/2)) / this.size.y) * (this.GRID_SIZE - 1));
     
-    const gridX = Math.floor((localX / this.size.x) * (this.GRID_SIZE - 1));
-    const gridZ = Math.floor((localZ / this.size.y) * (this.GRID_SIZE - 1));
-    
-    if (gridX >= 0 && gridX < this.GRID_SIZE && gridZ >= 0 && gridZ < this.GRID_SIZE) {
-      // Interpolate between grid points for smoother height transitions
-      const fracX = (localX / this.size.x) * (this.GRID_SIZE - 1) - gridX;
-      const fracZ = (localZ / this.size.y) * (this.GRID_SIZE - 1) - gridZ;
-      
-      const h00 = this.heightMap[gridX][gridZ];
-      const h10 = gridX < this.GRID_SIZE - 1 ? this.heightMap[gridX + 1][gridZ] : h00;
-      const h01 = gridZ < this.GRID_SIZE - 1 ? this.heightMap[gridX][gridZ + 1] : h00;
-      const h11 = (gridX < this.GRID_SIZE - 1 && gridZ < this.GRID_SIZE - 1) ? 
-        this.heightMap[gridX + 1][gridZ + 1] : h00;
-      
-      // Bilinear interpolation
-      return h00 * (1 - fracX) * (1 - fracZ) +
-             h10 * fracX * (1 - fracZ) +
-             h01 * (1 - fracX) * fracZ +
-             h11 * fracX * fracZ;
+    if (x >= 0 && x < this.GRID_SIZE && z >= 0 && z < this.GRID_SIZE) {
+      return this.heightMap[x][z];
     }
     return Biome.BASE_HEIGHT;
   }

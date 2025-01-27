@@ -3,6 +3,7 @@ import { Character } from '../entities/Character';
 import { Monster } from '../entities/Monster';
 import { Overworld } from '../levels/Overworld';
 import { CharacterController } from '../controls/CharacterController';
+import { CityBiome } from '../levels/biomes/CityBiome';
 
 export class Game {
   private scene: THREE.Scene;
@@ -172,24 +173,107 @@ export class Game {
     this.camera.lookAt(lookTarget);
   }
 
+  private handleCollisions() {
+    // Get current biome
+    const currentBiome = this.currentLevel.getBiomeAt(this.character.mesh.position);
+    
+    // Quick check if character moved significantly since last frame
+    const characterPos = this.character.mesh.position;
+    
+    // Handle monster collisions
+    for (const monster of this.monsters) {
+        // Quick distance check before detailed collision
+        const dx = characterPos.x - monster.mesh.position.x;
+        const dz = characterPos.z - monster.mesh.position.z;
+        const quickDist = dx * dx + dz * dz;
+        const minDist = (this.character.collisionRadius + monster.collisionRadius) * 2;
+        
+        if (quickDist < minDist * minDist && this.character.checkCollision(monster)) {
+            const distance = Math.sqrt(quickDist);
+            const overlap = (this.character.collisionRadius + monster.collisionRadius) - distance;
+            
+            if (distance > 0) {
+                const pushX = (dx / distance) * overlap;
+                const pushZ = (dz / distance) * overlap;
+                
+                characterPos.x += pushX;
+                characterPos.z += pushZ;
+            }
+
+            this.character.onCollideWithMonster(monster);
+            monster.onCollideWithCharacter(this.character);
+        }
+    }
+
+    // Handle building collisions if in city biome
+    if (currentBiome instanceof CityBiome) {
+        for (const building of currentBiome.getBuildings()) {
+            if (this.character.checkCollision(building)) {
+                const dx = characterPos.x - building.mesh.position.x;
+                const dz = characterPos.z - building.mesh.position.z;
+                const distance = Math.sqrt(dx * dx + dz * dz);
+                
+                if (distance < (this.character.collisionRadius + building.collisionRadius)) {
+                    const overlap = (this.character.collisionRadius + building.collisionRadius) - distance;
+                    if (distance > 0) {
+                        const pushX = (dx / distance) * overlap;
+                        const pushZ = (dz / distance) * overlap;
+                        
+                        characterPos.x += pushX;
+                        characterPos.z += pushZ;
+                    }
+                }
+            }
+        }
+    }
+  }
+
   private animate = () => {
     requestAnimationFrame(this.animate);
 
     const delta = 1/60;
 
-    // Update game state
+    // Store current position before updates
+    const previousPosition = this.character.mesh.position.clone();
+
+    // Update character controller (this updates velocity)
     this.characterController.update();
     
-    // Get ground height at character's position
-    const groundHeight = this.currentLevel.getGroundHeight(this.character.mesh.position);
-    this.character.update(delta, groundHeight);
+    // Get the character's collision radius
+    const radius = this.character.collisionRadius;
+    
+    // Calculate next position for collision check
+    const velocity = this.character.getVelocity();
+    const nextPosition = previousPosition.clone().add(velocity.clone().multiplyScalar(delta));
+
+    // Check collision with boundaries by testing points around the character
+    const collisionPoints = [
+        nextPosition.clone().add(new THREE.Vector3(radius, 0, 0)),  // Right
+        nextPosition.clone().add(new THREE.Vector3(-radius, 0, 0)), // Left
+        nextPosition.clone().add(new THREE.Vector3(0, 0, radius)),  // Front
+        nextPosition.clone().add(new THREE.Vector3(0, 0, -radius))  // Back
+    ];
+
+    // Only block movement if collision points would be outside valid area
+    const wouldCollide = collisionPoints.some(point => !this.currentLevel.isPositionValid(point));
+
+    if (wouldCollide) {
+        // If would collide, keep current position
+        this.character.mesh.position.copy(previousPosition);
+        // Zero out velocity in x and z
+        this.character.getVelocity().setX(0).setZ(0);
+    } else {
+        // If no collision, allow the update
+        this.character.update(delta, this.currentLevel.getGroundHeight(nextPosition));
+    }
     
     this.monsters.forEach(monster => {
-      monster.setTarget(this.character.mesh.position);
-      monster.update(delta, this.currentLevel.getGroundHeight(monster.mesh.position));
+        monster.setTarget(this.character.mesh.position);
+        monster.update(delta, this.currentLevel.getGroundHeight(monster.mesh.position));
     });
 
     this.updateCamera();
+    this.handleCollisions();
 
     // Render scene
     this.renderer.render(this.scene, this.camera);

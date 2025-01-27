@@ -4,6 +4,7 @@ export abstract class Entity {
   mesh: THREE.Group;
   protected velocity: THREE.Vector3;
   protected isGrounded: boolean;
+  public collisionRadius: number = .5; // Increased from 1.0 to better match character size
 
   constructor() {
     this.mesh = new THREE.Group();
@@ -56,5 +57,23 @@ export abstract class Entity {
 
   public isOnGround(): boolean {
     return this.isGrounded;
+  }
+
+  // Add collision check method
+  public checkCollision(other: Entity): boolean {
+    // Allow entities to override with their own collision check
+    if (other.hasCustomCollision()) {
+      return other.checkCollision(this);
+    }
+
+    // Default circular collision
+    const dx = this.mesh.position.x - other.mesh.position.x;
+    const dz = this.mesh.position.z - other.mesh.position.z;
+    const distance = Math.sqrt(dx * dx + dz * dz);
+    return distance < (this.collisionRadius + other.collisionRadius);
+  }
+
+  protected hasCustomCollision(): boolean {
+    return false;
   }
 } 

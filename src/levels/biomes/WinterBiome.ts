@@ -7,7 +7,7 @@ export class WinterBiome extends Biome {
   private snowParticles!: THREE.Points;
   private readonly SNOW_COUNT = 3000;
 
-  generate(): void {
+  protected generateTerrain(): void {
     this.generateHeightMap();
     this.createSnowGround();
     this.createPineTrees();
@@ -19,16 +19,18 @@ export class WinterBiome extends Biome {
     for (let i = 0; i < this.GRID_SIZE; i++) {
       this.heightMap[i] = [];
       for (let j = 0; j < this.GRID_SIZE; j++) {
-        const x = (i / this.GRID_SIZE) * 4;
-        const y = (j / this.GRID_SIZE) * 4;
-        
-        // Calculate raw height
-        const rawHeight = this.noise(x, y) * 2;
-        
-        // Normalize height at edges
-        const worldX = this.position.x - this.size.x/2 + (i / this.GRID_SIZE) * this.size.x;
-        const worldZ = this.position.y - this.size.y/2 + (j / this.GRID_SIZE) * this.size.y;
-        this.heightMap[i][j] = this.normalizeEdgeHeight(rawHeight, worldX, worldZ);
+        const x = i / (this.GRID_SIZE - 1);
+        const z = j / (this.GRID_SIZE - 1);
+
+        // Calculate world space coordinates
+        const worldX = this.position.x - this.size.x/2 + x * this.size.x;
+        const worldZ = this.position.y - this.size.y/2 + z * this.size.y;
+
+        // Calculate raw snow height
+        const rawHeight = (this.noise(x * 4, z * 4) * 4) + 1; // Snow hills
+
+        // Blend with base height at edges
+        this.heightMap[i][j] = this.blendHeightWithEdge(worldX, worldZ, rawHeight);
       }
     }
   }
@@ -57,7 +59,7 @@ export class WinterBiome extends Biome {
     ground.rotation.x = -Math.PI / 2;
     ground.position.set(this.position.x, 0, this.position.y);
     ground.receiveShadow = true;
-    this.scene.add(ground);
+    this.addObject(ground);
   }
 
   private createSnowfall() {
@@ -87,7 +89,7 @@ export class WinterBiome extends Biome {
     });
     
     this.snowParticles = new THREE.Points(snowGeometry, snowMaterial);
-    this.scene.add(this.snowParticles);
+    this.addObject(this.snowParticles);
 
     // Improved animation
     const animate = () => {
@@ -111,13 +113,13 @@ export class WinterBiome extends Biome {
   }
 
   private createIgloos() {
-    const iglooCount = Math.floor((this.size.x * this.size.y) / 10000); // Sparse igloos
+    const iglooCount = Math.floor((this.size.x * this.size.y) / 20000);
     
     for (let i = 0; i < iglooCount; i++) {
       const x = this.position.x - this.size.x/2 + Math.random() * this.size.x;
       const z = this.position.y - this.size.y/2 + Math.random() * this.size.y;
-      const height = this.getGroundHeight(new THREE.Vector3(x, 0, z));
-      this.createIgloo(new THREE.Vector3(x, height, z));
+      const position = new THREE.Vector3(x, 0, z);
+      this.createIgloo(position);
     }
   }
 
@@ -133,7 +135,7 @@ export class WinterBiome extends Biome {
       metalness: 0.0
     });
     const dome = new THREE.Mesh(domeGeometry, snowMaterial);
-    dome.position.y = radius;
+    dome.position.y = 0;
     dome.castShadow = true;
     igloo.add(dome);
 
@@ -145,38 +147,37 @@ export class WinterBiome extends Biome {
     tunnel.position.set(radius * 0.8, tunnelRadius, 0);
     igloo.add(tunnel);
 
-    igloo.position.copy(position);
-    igloo.rotation.y = Math.random() * Math.PI * 2;
-    this.scene.add(igloo);
+    // Place igloo with proper grounding
+    this.addGroundedObject(igloo, position, 0);
   }
 
   private createPineTrees() {
-    const treeCount = Math.floor((this.size.x * this.size.y) / 150);
+    const treeCount = Math.floor((this.size.x * this.size.y) / 1000);
     
     for (let i = 0; i < treeCount; i++) {
       const x = this.position.x - this.size.x/2 + Math.random() * this.size.x;
       const z = this.position.y - this.size.y/2 + Math.random() * this.size.y;
-      const height = this.getGroundHeight(new THREE.Vector3(x, 0, z));
-      this.createPineTree(new THREE.Vector3(x, height, z));
+      const position = new THREE.Vector3(x, 0, z);
+      this.createPineTree(position);
     }
   }
 
   private createPineTree(position: THREE.Vector3) {
     const tree = new THREE.Group();
 
-    // Create trunk
+    // Create trunk - moved down to be half-buried in ground
     const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.3, 4, 8);
     const trunkMaterial = new THREE.MeshStandardMaterial({ 
       color: 0x3B2F2F,
       roughness: 0.9
     });
     const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-    trunk.position.y = 2;
+    trunk.position.y = 0;
     trunk.castShadow = true;
     tree.add(trunk);
 
     // Create snow-covered pine layers
-    const pineColor = 0x1B4F2F; // Darker green for contrast with snow
+    const pineColor = 0x1B4F2F;
     const pineMaterial = new THREE.MeshStandardMaterial({ 
       color: pineColor,
       roughness: 0.8
@@ -187,19 +188,18 @@ export class WinterBiome extends Biome {
       metalness: 0.0
     });
 
-    for (let i = 0; i < 5; i++) { // Added an extra layer
-      const y = 2 + i * 0.7;
+    // Adjust layer positions relative to trunk base
+    for (let i = 0; i < 5; i++) {
+      const y = i * 0.7;
       const radius = 1.5 - i * 0.2;
       const height = 0.9;
 
-      // Main pine layer
       const pineGeometry = new THREE.ConeGeometry(radius, height, 10);
       const pine = new THREE.Mesh(pineGeometry, pineMaterial);
       pine.position.y = y;
       pine.castShadow = true;
       tree.add(pine);
 
-      // Thicker snow layer
       const snowGeometry = new THREE.ConeGeometry(radius * 0.9, height * 0.3, 10);
       const snow = new THREE.Mesh(snowGeometry, snowMaterial);
       snow.position.y = y + height/2 - 0.1;
@@ -221,9 +221,8 @@ export class WinterBiome extends Biome {
       }
     }
 
-    tree.position.copy(position);
-    tree.rotation.y = Math.random() * Math.PI * 2;
-    this.scene.add(tree);
+    // Place tree with proper grounding
+    this.addGroundedObject(tree, position, 0);
   }
 
   private noise(x: number, y: number): number {
@@ -233,29 +232,22 @@ export class WinterBiome extends Biome {
   }
 
   override getGroundHeight(position: THREE.Vector3): number {
-    const localX = position.x - (this.position.x - this.size.x/2);
-    const localZ = position.z - (this.position.y - this.size.y/2);
+    const x = Math.floor(((position.x - (this.position.x - this.size.x/2)) / this.size.x) * (this.GRID_SIZE - 1));
+    const z = Math.floor(((position.z - (this.position.y - this.size.y/2)) / this.size.y) * (this.GRID_SIZE - 1));
     
-    const gridX = Math.floor((localX / this.size.x) * (this.GRID_SIZE - 1));
-    const gridZ = Math.floor((localZ / this.size.y) * (this.GRID_SIZE - 1));
-    
-    if (gridX >= 0 && gridX < this.GRID_SIZE && gridZ >= 0 && gridZ < this.GRID_SIZE) {
-      // Interpolate between grid points for smoother height transitions
-      const fracX = (localX / this.size.x) * (this.GRID_SIZE - 1) - gridX;
-      const fracZ = (localZ / this.size.y) * (this.GRID_SIZE - 1) - gridZ;
-      
-      const h00 = this.heightMap[gridX][gridZ];
-      const h10 = gridX < this.GRID_SIZE - 1 ? this.heightMap[gridX + 1][gridZ] : h00;
-      const h01 = gridZ < this.GRID_SIZE - 1 ? this.heightMap[gridX][gridZ + 1] : h00;
-      const h11 = (gridX < this.GRID_SIZE - 1 && gridZ < this.GRID_SIZE - 1) ? 
-        this.heightMap[gridX + 1][gridZ + 1] : h00;
-      
-      // Bilinear interpolation
-      return h00 * (1 - fracX) * (1 - fracZ) +
-             h10 * fracX * (1 - fracZ) +
-             h01 * (1 - fracX) * fracZ +
-             h11 * fracX * fracZ;
+    if (x >= 0 && x < this.GRID_SIZE && z >= 0 && z < this.GRID_SIZE) {
+      return this.heightMap[x][z];
     }
     return Biome.BASE_HEIGHT;
+  }
+
+  public cleanup(): void {
+    super.cleanup();
+    if (this.snowParticles) {
+      this.scene.remove(this.snowParticles);
+      (this.snowParticles.material as THREE.Material).dispose();
+      (this.snowParticles.geometry as THREE.BufferGeometry).dispose();
+      this.snowParticles = null!;
+    }
   }
 } 

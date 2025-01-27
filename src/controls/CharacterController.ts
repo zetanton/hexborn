@@ -5,8 +5,9 @@ export class CharacterController {
   private character: Character;
   private moveDirection: THREE.Vector3 = new THREE.Vector3();
   private cameraRotation: number = 0;
-  private readonly MOVEMENT_SPEED = 8;
-  private readonly MAX_VELOCITY = 10;
+  private readonly NORMAL_SPEED = 8;
+  private readonly SPRINT_SPEED = 24; // 3x normal speed
+  private isSprinting: boolean = false;
 
   constructor(character: Character) {
     this.character = character;
@@ -39,6 +40,9 @@ export class CharacterController {
       case 'Space':
         this.character.jump();
         break;
+      case 'ShiftRight':
+        this.isSprinting = true;
+        break;
     }
   }
 
@@ -59,6 +63,9 @@ export class CharacterController {
       case 'KeyD':
       case 'ArrowRight':
         if (this.moveDirection.x > 0) this.moveDirection.x = 0;
+        break;
+      case 'ShiftRight':
+        this.isSprinting = false;
         break;
     }
   }
@@ -85,17 +92,20 @@ export class CharacterController {
 
       // Normalize and apply movement with better ground check
       cameraRelativeMovement.normalize();
+      const currentSpeed = this.isSprinting ? this.SPRINT_SPEED : this.NORMAL_SPEED;
+      
       if (this.character.isOnGround()) {
-        this.character.moveInDirection(cameraRelativeMovement, this.MOVEMENT_SPEED);
+        this.character.moveInDirection(cameraRelativeMovement, currentSpeed);
       } else {
         // Reduced air control
-        this.character.moveInDirection(cameraRelativeMovement, this.MOVEMENT_SPEED * 0.3);
+        this.character.moveInDirection(cameraRelativeMovement, currentSpeed * 0.3);
       }
 
       // Clamp velocity
       const velocity = this.character.getVelocity();
-      velocity.x = THREE.MathUtils.clamp(velocity.x, -this.MAX_VELOCITY, this.MAX_VELOCITY);
-      velocity.z = THREE.MathUtils.clamp(velocity.z, -this.MAX_VELOCITY, this.MAX_VELOCITY);
+      const maxVelocity = this.isSprinting ? this.SPRINT_SPEED : this.NORMAL_SPEED;
+      velocity.x = THREE.MathUtils.clamp(velocity.x, -maxVelocity, maxVelocity);
+      velocity.z = THREE.MathUtils.clamp(velocity.z, -maxVelocity, maxVelocity);
     } else {
       this.character.moveInDirection(new THREE.Vector3(), 0);
     }

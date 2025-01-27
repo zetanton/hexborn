@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Entity } from './Entity';
+import { Character } from './Character';
 
 export class Monster extends Entity {
   private target: THREE.Vector3 | null = null;
@@ -68,6 +69,22 @@ export class Monster extends Entity {
       // Update monster rotation to face movement direction
       const angle = Math.atan2(direction.x, direction.z);
       this.mesh.rotation.y = angle;
+    }
+  }
+
+  public onCollideWithCharacter(_character: Character) {
+    // Stop the monster's movement towards the character
+    const dx = this.mesh.position.x - _character.mesh.position.x;
+    const dz = this.mesh.position.z - _character.mesh.position.z;
+    const norm = Math.sqrt(dx * dx + dz * dz);
+    const dirX = dx / norm;
+    const dirZ = dz / norm;
+    
+    // Stop velocity in the collision direction
+    const dotProduct = (this.velocity.x * dirX + this.velocity.z * dirZ);
+    if (dotProduct < 0) {
+        this.velocity.x -= dotProduct * dirX;
+        this.velocity.z -= dotProduct * dirZ;
     }
   }
 } 

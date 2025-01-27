@@ -7,7 +7,7 @@ export class SwampBiome extends Biome {
   private readonly WATER_LEVEL = 0.5;
   private fog: THREE.Fog | null = null;
 
-  generate(): void {
+  protected generateTerrain(): void {
     this.generateHeightMap();
     this.createSwampGround();
     this.createSwampWater();
@@ -16,19 +16,23 @@ export class SwampBiome extends Biome {
   }
 
   private generateHeightMap() {
+    // Initialize the heightMap array first
+    this.heightMap = Array(this.GRID_SIZE).fill(null).map(() => Array(this.GRID_SIZE).fill(0));
+    
     for (let i = 0; i < this.GRID_SIZE; i++) {
-      this.heightMap[i] = [];
       for (let j = 0; j < this.GRID_SIZE; j++) {
-        const x = (i / this.GRID_SIZE) * 6;
-        const y = (j / this.GRID_SIZE) * 6;
-        
-        // Calculate raw swamp height (keep it relatively low and boggy)
-        const rawHeight = (this.noise(x, y) * 1.5) - 0.5;
-        
-        // Normalize height at edges
-        const worldX = this.position.x - this.size.x/2 + (i / this.GRID_SIZE) * this.size.x;
-        const worldZ = this.position.y - this.size.y/2 + (j / this.GRID_SIZE) * this.size.y;
-        this.heightMap[i][j] = this.normalizeEdgeHeight(rawHeight, worldX, worldZ);
+        const x = i / (this.GRID_SIZE - 1);
+        const z = j / (this.GRID_SIZE - 1);
+
+        // Calculate world space coordinates
+        const worldX = this.position.x - this.size.x/2 + x * this.size.x;
+        const worldZ = this.position.y - this.size.y/2 + z * this.size.y;
+
+        // Calculate raw swamp height
+        const rawHeight = (this.noise(x * 6, z * 6) * 1.5) - 0.5; // Uneven, muddy terrain
+
+        // Blend with base height at edges
+        this.heightMap[i][j] = this.blendHeightWithEdge(worldX, worldZ, rawHeight);
       }
     }
   }
@@ -57,7 +61,7 @@ export class SwampBiome extends Biome {
     ground.rotation.x = -Math.PI / 2;
     ground.position.set(this.position.x, 0, this.position.y);
     ground.receiveShadow = true;
-    this.scene.add(ground);
+    this.addObject(ground);
   }
 
   private createSwampWater() {
@@ -73,7 +77,7 @@ export class SwampBiome extends Biome {
     const water = new THREE.Mesh(waterGeometry, waterMaterial);
     water.rotation.x = -Math.PI / 2;
     water.position.set(this.position.x, this.WATER_LEVEL, this.position.y);
-    this.scene.add(water);
+    this.addObject(water);
   }
 
   private createVegetation() {
@@ -126,9 +130,10 @@ export class SwampBiome extends Biome {
     trunk.castShadow = true;
     tree.add(trunk);
     
-    tree.position.copy(position);
+    // Place tree with base at ground level
+    this.placeObjectOnGround(tree, position, 0);
     tree.rotation.y = Math.random() * Math.PI * 2;
-    this.scene.add(tree);
+    this.addObject(tree);
   }
 
   private createCattail(position: THREE.Vector3) {
@@ -154,10 +159,11 @@ export class SwampBiome extends Biome {
     top.position.y = 1.4;
     cattail.add(top);
     
-    cattail.position.copy(position);
+    // Place cattail with base at ground level
+    this.placeObjectOnGround(cattail, position, 0);
     cattail.rotation.y = Math.random() * Math.PI * 2;
     cattail.rotation.x = (Math.random() - 0.5) * 0.2;
-    this.scene.add(cattail);
+    this.addObject(cattail);
   }
 
   private createFog() {
@@ -180,29 +186,19 @@ export class SwampBiome extends Biome {
   }
 
   override getGroundHeight(position: THREE.Vector3): number {
-    const localX = position.x - (this.position.x - this.size.x/2);
-    const localZ = position.z - (this.position.y - this.size.y/2);
+    // Calculate grid coordinates
+    let x = Math.floor(((position.x - (this.position.x - this.size.x/2)) / this.size.x) * (this.GRID_SIZE - 1));
+    let z = Math.floor(((position.z - (this.position.y - this.size.y/2)) / this.size.y) * (this.GRID_SIZE - 1));
     
-    const gridX = Math.floor((localX / this.size.x) * (this.GRID_SIZE - 1));
-    const gridZ = Math.floor((localZ / this.size.y) * (this.GRID_SIZE - 1));
+    // Clamp coordinates to valid range
+    x = Math.max(0, Math.min(x, this.GRID_SIZE - 1));
+    z = Math.max(0, Math.min(z, this.GRID_SIZE - 1));
     
-    if (gridX >= 0 && gridX < this.GRID_SIZE && gridZ >= 0 && gridZ < this.GRID_SIZE) {
-      // Interpolate between grid points for smoother height transitions
-      const fracX = (localX / this.size.x) * (this.GRID_SIZE - 1) - gridX;
-      const fracZ = (localZ / this.size.y) * (this.GRID_SIZE - 1) - gridZ;
-      
-      const h00 = this.heightMap[gridX][gridZ];
-      const h10 = gridX < this.GRID_SIZE - 1 ? this.heightMap[gridX + 1][gridZ] : h00;
-      const h01 = gridZ < this.GRID_SIZE - 1 ? this.heightMap[gridX][gridZ + 1] : h00;
-      const h11 = (gridX < this.GRID_SIZE - 1 && gridZ < this.GRID_SIZE - 1) ? 
-        this.heightMap[gridX + 1][gridZ + 1] : h00;
-      
-      // Bilinear interpolation
-      return h00 * (1 - fracX) * (1 - fracZ) +
-             h10 * fracX * (1 - fracZ) +
-             h01 * (1 - fracX) * fracZ +
-             h11 * fracX * fracZ;
+    // Check if heightMap has been initialized
+    if (this.heightMap && this.heightMap[x] && this.heightMap[x][z] !== undefined) {
+      return this.heightMap[x][z];
     }
+    
     return Biome.BASE_HEIGHT;
   }
 } 

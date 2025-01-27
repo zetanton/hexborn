@@ -10,15 +10,13 @@ import { CityBiome } from './biomes/CityBiome';
 export class Overworld {
   private scene: THREE.Scene;
   private biomes: Biome[] = [];
-  private readonly BIOME_SIZE = new THREE.Vector2(100, 100);
-  private readonly WORLD_BARRIER_SIZE = 1000;
+  private readonly BIOME_SIZE = new THREE.Vector2(300, 300);
+  private readonly WORLD_BARRIER_SIZE = 2000;
   private birds: THREE.Group[] = [];
   private clouds: THREE.Mesh[] = [];
-  private readonly SPACING = 100; // Match BIOME_SIZE to avoid gaps
-  private readonly barrierBounds = {
-    min: new THREE.Vector3(-150, -100, -100), // Adjusted to match biome grid
-    max: new THREE.Vector3(150, 100, 100)
-  };
+  private readonly SPACING = 300;
+  private readonly VISIBILITY_RANGE = 1500; // 5 biomes worth of distance
+  private activeChunks: Set<Biome> = new Set();
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -27,62 +25,141 @@ export class Overworld {
     this.createOcean();
     this.createClouds();
     this.createBirds();
+    // Start the animations
+    this.animateClouds();
+    this.animateBirds();
   }
 
   private setupWorld() {
-    // Create sky
+    // Create larger sky for better fog effect
     const sky = new THREE.Mesh(
       new THREE.SphereGeometry(this.WORLD_BARRIER_SIZE, 32, 32),
       new THREE.MeshBasicMaterial({
         color: 0x87CEEB,
-        side: THREE.BackSide
+        side: THREE.BackSide,
+        fog: true
       })
     );
     this.scene.add(sky);
 
-    // Create biomes in a 3x2 grid
+    // Create biomes in a linear arrangement
     const biomeTypes = [
-      [WinterBiome, DesertBiome, SwampBiome],
-      [ForestBiome, MountainBiome, CityBiome]
+      CityBiome,
+      DesertBiome,
+      SwampBiome,
+      ForestBiome,
+      MountainBiome,
+      WinterBiome
     ];
 
-    // Adjust grid positioning to create continuous landmass
-    const startX = -this.SPACING * 1.5; // Center of leftmost biomes
-    const startZ = -this.SPACING * 0.5; // Center of top row
+    // Place biomes in a line along X axis
+    biomeTypes.forEach((BiomeClass, index) => {
+      const position = new THREE.Vector2(
+        index * this.SPACING,
+        0
+      );
+      
+      const biome = new BiomeClass(this.scene, position, this.BIOME_SIZE);
+      this.biomes.push(biome);
+    });
 
-    for (let row = 0; row < 2; row++) {
-      for (let col = 0; col < 3; col++) {
-        const BiomeClass = biomeTypes[row][col];
-        const position = new THREE.Vector2(
-          startX + col * this.SPACING,
-          startZ + row * this.SPACING
-        );
-        
-        const biome = new BiomeClass(this.scene, position, this.BIOME_SIZE);
-        biome.generate();
-        this.biomes.push(biome);
-      }
-    }
+    // Generate ALL biomes immediately and make them visible
+    this.biomes.forEach(biome => {
+      biome.generate();
+      biome.setVisible(true); // Make all biomes visible initially
+      this.activeChunks.add(biome);
+    });
 
-    // Move ocean lower to avoid clipping
-    this.createOcean(-10); // Pass lower Y position
+    // Adjust fog for better visibility
+    this.scene.fog = new THREE.Fog(
+      0x87CEEB,
+      this.VISIBILITY_RANGE * 0.4, // Start fog further out
+      this.VISIBILITY_RANGE * 1.2  // End fog further out
+    );
   }
 
   private createWorldBoundary() {
-    // Invisible barrier
+    // Calculate total world length based on biomes
+    const worldLength = this.biomes.length * this.SPACING;
+    
+    // Create visible barriers at the edges
     const barrierGeometry = new THREE.BoxGeometry(
-      this.barrierBounds.max.x - this.barrierBounds.min.x,
-      this.barrierBounds.max.y - this.barrierBounds.min.y,
-      this.barrierBounds.max.z - this.barrierBounds.min.z
+        2, // Thin barrier
+        20, // Lower height for visibility
+        this.BIOME_SIZE.y // Match biome depth
     );
-    const barrierMaterial = new THREE.MeshBasicMaterial({
-      transparent: true,
-      opacity: 0,
-      side: THREE.BackSide
+    const barrierMaterial = new THREE.MeshStandardMaterial({
+        color: 0xff0000, // Red color for visibility
+        transparent: true,
+        opacity: 0.5
     });
-    const barrier = new THREE.Mesh(barrierGeometry, barrierMaterial);
-    barrier.position.y = (this.barrierBounds.max.y + this.barrierBounds.min.y) / 2;
-    this.scene.add(barrier);
+
+    // Left barrier - align with first biome's left edge
+    const leftBarrier = new THREE.Mesh(barrierGeometry, barrierMaterial);
+    leftBarrier.position.set(
+        -this.BIOME_SIZE.x/2, // Align with first biome's left edge
+        10, // Half the barrier height
+        0
+    );
+    this.scene.add(leftBarrier);
+
+    // Right barrier - align with last biome's right edge
+    const rightBarrier = new THREE.Mesh(barrierGeometry, barrierMaterial);
+    rightBarrier.position.set(
+        worldLength - this.SPACING + this.BIOME_SIZE.x/2, // Align with last biome's right edge
+        10,
+        0
+    );
+    this.scene.add(rightBarrier);
+
+    // Front and back barriers
+    const sideBarrierGeometry = new THREE.BoxGeometry(
+        worldLength, // Match total world length
+        20,
+        2 // Thin barrier
+    );
+
+    // Front barrier - align with biomes' front edge
+    const frontBarrier = new THREE.Mesh(sideBarrierGeometry, barrierMaterial);
+    frontBarrier.position.set(
+        (worldLength - this.SPACING)/2, // Center between first and last biome
+        10,
+        this.BIOME_SIZE.y/2 // Align with biomes' front edge
+    );
+    this.scene.add(frontBarrier);
+
+    // Back barrier - align with biomes' back edge
+    const backBarrier = new THREE.Mesh(sideBarrierGeometry, barrierMaterial);
+    backBarrier.position.set(
+        (worldLength - this.SPACING)/2,
+        10,
+        -this.BIOME_SIZE.y/2 // Align with biomes' back edge
+    );
+    this.scene.add(backBarrier);
+
+    // Add debug markers at corners of all biomes
+    const markerGeometry = new THREE.BoxGeometry(5, 30, 5);
+    const markerMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+
+    this.biomes.forEach((biome, index) => {
+        const worldX = index * this.SPACING;
+        
+        // Create corner markers for this biome
+        const corners = [
+            // Front corners
+            { x: worldX - this.BIOME_SIZE.x/2, z: -this.BIOME_SIZE.y/2 }, // Front left
+            { x: worldX + this.BIOME_SIZE.x/2, z: -this.BIOME_SIZE.y/2 }, // Front right
+            // Back corners
+            { x: worldX - this.BIOME_SIZE.x/2, z: this.BIOME_SIZE.y/2 },  // Back left
+            { x: worldX + this.BIOME_SIZE.x/2, z: this.BIOME_SIZE.y/2 }   // Back right
+        ];
+
+        corners.forEach(corner => {
+            const marker = new THREE.Mesh(markerGeometry, markerMaterial);
+            marker.position.set(corner.x, 15, corner.z);
+            this.scene.add(marker);
+        });
+    });
   }
 
   private createOcean(height: number = -10) {
@@ -109,21 +186,23 @@ export class Overworld {
   }
 
   private createClouds() {
-    const cloudCount = 50;
+    const cloudCount = 100; // More clouds
     for (let i = 0; i < cloudCount; i++) {
       const cloud = this.createCloud();
       const angle = (i / cloudCount) * Math.PI * 2;
-      const radius = Math.random() * (this.WORLD_BARRIER_SIZE/2 - 50) + 50;
+      const radius = Math.random() * (this.WORLD_BARRIER_SIZE/2 - 100) + 100;
       cloud.position.set(
         Math.cos(angle) * radius,
-        30 + Math.random() * 20,
+        100 + Math.random() * 50, // Higher clouds
         Math.sin(angle) * radius
       );
+      cloud.scale.multiplyScalar(20); // Larger clouds
       this.clouds.push(cloud);
       this.scene.add(cloud);
     }
+  }
 
-    // Animate clouds
+  private animateClouds() {
     const animate = () => {
       this.clouds.forEach((cloud, i) => {
         const time = Date.now() * 0.0001;
@@ -173,32 +252,40 @@ export class Overworld {
   }
 
   private createBirds() {
-    const birdCount = 20;
+    const birdCount = 30;
     for (let i = 0; i < birdCount; i++) {
       const bird = this.createBird();
       const angle = (i / birdCount) * Math.PI * 2;
-      const radius = Math.random() * (this.WORLD_BARRIER_SIZE/3 - 30) + 30;
+      const radius = Math.random() * (this.WORLD_BARRIER_SIZE/3 - 50) + 50;
+      // Add random speed multiplier for each bird
+      bird.userData.speedMultiplier = 0.8 + Math.random() * 0.4; // Speed varies from 0.8x to 1.2x
       bird.position.set(
         Math.cos(angle) * radius,
-        40 + Math.random() * 20,
+        70 + Math.random() * 40,
         Math.sin(angle) * radius
       );
+      bird.scale.multiplyScalar(1.5);
       this.birds.push(bird);
       this.scene.add(bird);
     }
+  }
 
-    // Animate birds
+  private animateBirds() {
     const animate = () => {
       this.birds.forEach((bird, i) => {
-        const time = Date.now() * 0.0002;
+        // Use bird's individual speed multiplier
+        const baseSpeed = 0.0001;
+        const speed = baseSpeed * (bird.userData.speedMultiplier || 1);
+        const time = Date.now() * speed;
         const angle = time + (i * Math.PI * 2 / this.birds.length);
         const radius = Math.sqrt(bird.position.x ** 2 + bird.position.z ** 2);
         bird.position.x = Math.cos(angle) * radius;
         bird.position.z = Math.sin(angle) * radius;
         bird.rotation.y = -angle - Math.PI/2;
         
-        // Wing flapping animation
-        const wingTime = Date.now() * 0.01;
+        // Wing flapping speed also varies with flight speed
+        const wingSpeed = 0.008 * (bird.userData.speedMultiplier || 1);
+        const wingTime = Date.now() * wingSpeed;
         const wings = bird.children;
         if (wings.length >= 2) {
           wings[0].rotation.z = Math.sin(wingTime) * 0.3;
@@ -239,6 +326,7 @@ export class Overworld {
   }
 
   getBiomeAt(position: THREE.Vector3): Biome | null {
+    // Simply return the biome at this position - no need to generate since all are generated
     return this.biomes.find(biome => biome.isInBiome(position)) || null;
   }
 
@@ -247,15 +335,48 @@ export class Overworld {
     if (biome) {
       return biome.getGroundHeight(position);
     }
-    return -5; // Ocean level if outside biomes
+    // If not in a biome, return a very high value to prevent movement
+    return 1000; // Effectively blocks movement
   }
 
-  public updateEnvironment(position: THREE.Vector3) {
-    // Update fog for each biome
+  public updateVisibleChunks(playerPosition: THREE.Vector3): void {
+    // Keep all biomes visible, just update fog and effects
+    this.biomes.forEach(biome => {
+      // Update fog density based on distance
+      if ('updateFog' in biome) {
+        (biome as SwampBiome).updateFog(playerPosition);
+      }
+    });
+  }
+
+  public updateEnvironment(position: THREE.Vector3): void {
+    this.updateVisibleChunks(position);
+    
+    // Update fog and other environmental effects
     this.biomes.forEach(biome => {
       if ('updateFog' in biome) {
         (biome as SwampBiome).updateFog(position);
       }
     });
+  }
+
+  // Add this new method to check if a position is within valid bounds
+  public isPositionValid(position: THREE.Vector3): boolean {
+    // Check if position is within any biome's full boundaries
+    const inBiome = this.biomes.some((_biome, index) => {
+        const halfWidth = this.BIOME_SIZE.x / 2;
+        const halfHeight = this.BIOME_SIZE.y / 2;
+        
+        // Calculate actual world position of biome based on spacing
+        const worldX = index * this.SPACING;
+        
+        // Use exact biome boundaries relative to world position
+        return position.x >= (worldX - halfWidth) &&
+               position.x <= (worldX + halfWidth) &&
+               position.z >= -halfHeight &&
+               position.z <= halfHeight;
+    });
+
+    return inBiome;
   }
 } 

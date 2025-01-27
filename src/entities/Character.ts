@@ -3,6 +3,7 @@ import { Entity } from './Entity';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { Wireframe } from 'three/addons/lines/Wireframe.js';
 import { WireframeGeometry2 } from 'three/addons/lines/WireframeGeometry2.js';
+import { Monster } from './Monster';
 
 interface Point {
   position: THREE.Vector3;
@@ -27,7 +28,7 @@ export class Character extends Entity {
   private isWalking: boolean = false;
   private isJumping: boolean = false;
   private isCasting: boolean = false;
-  private castingType: 'fire' | 'ice' | null = null;
+  private _castingType: 'fire' | 'ice' | null = null;
   private jumpVelocity: number = 0;
   private readonly JUMP_FORCE: number = 15;
   private readonly GRAVITY: number = 30;
@@ -41,10 +42,19 @@ export class Character extends Entity {
   private readonly CLOTH_HEIGHT = 10;
   private readonly CLOTH_SEGMENT_SIZE = 0.1;
 
+  private isInvulnerable: boolean = false;
+  private invulnerabilityTimer: number = 0;
+  private readonly INVULNERABILITY_DURATION: number = 1000; // 1 second
+
+  // Add health property
+  private health: number = 100;
+
   constructor() {
     super();
     this.createWizard();
     this.initializeClothSimulation();
+    // Start at origin to see initial biomes
+    this.mesh.position.set(0, 0.75, 0);
   }
 
   private createWizard() {
@@ -749,6 +759,14 @@ export class Character extends Entity {
     } else {
       this.applyIdleAnimation();
     }
+
+    // Update invulnerability
+    if (this.isInvulnerable) {
+      this.invulnerabilityTimer -= delta;
+      if (this.invulnerabilityTimer <= 0) {
+        this.isInvulnerable = false;
+      }
+    }
   }
 
   private applyIdleAnimation() {
@@ -832,12 +850,12 @@ export class Character extends Entity {
 
   startCasting(type: 'fire' | 'ice') {
     this.isCasting = true;
-    this.castingType = type;
+    this._castingType = type;
   }
 
   stopCasting() {
     this.isCasting = false;
-    this.castingType = null;
+    this._castingType = null;
   }
 
   moveInDirection(direction: THREE.Vector3, speed: number) {
@@ -855,6 +873,38 @@ export class Character extends Entity {
       this.velocity.x = 0;
       this.velocity.z = 0;
       this.isWalking = false;
+    }
+  }
+
+  public onCollideWithMonster(monster: Monster) {
+    if (!this.isInvulnerable) {
+        this.health -= 10;
+        this.isInvulnerable = true;
+        this.invulnerabilityTimer = this.INVULNERABILITY_DURATION;
+        
+        // Push the character back to just outside the monster's collision radius
+        const dx = this.mesh.position.x - monster.mesh.position.x;
+        const dz = this.mesh.position.z - monster.mesh.position.z;
+        const distance = Math.sqrt(dx * dx + dz * dz);
+        const overlap = (this.collisionRadius + monster.collisionRadius) - distance;
+        
+        if (overlap > 0) {
+            // Normalize the direction
+            const norm = Math.sqrt(dx * dx + dz * dz);
+            const dirX = dx / norm;
+            const dirZ = dz / norm;
+            
+            // Move character out of collision
+            this.mesh.position.x += dirX * overlap;
+            this.mesh.position.z += dirZ * overlap;
+            
+            // Stop velocity in the collision direction
+            const dotProduct = (this.velocity.x * dirX + this.velocity.z * dirZ);
+            if (dotProduct < 0) {
+                this.velocity.x -= dotProduct * dirX;
+                this.velocity.z -= dotProduct * dirZ;
+            }
+        }
     }
   }
 } 
