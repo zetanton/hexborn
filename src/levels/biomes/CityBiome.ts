@@ -1,14 +1,18 @@
 import * as THREE from 'three';
 import { Biome } from './Biome';
 import { Building } from '../../entities/Building';
+import { StreetLamp } from '../../entities/StreetLamp';
 
 export class CityBiome extends Biome {
   private buildings: Building[] = [];
+  private streetLamps: StreetLamp[] = [];
 
   protected generateTerrain(): void {
     this.createGround();
     this.createRoads();
     this.createBuildings();
+    this.createStreetLamps();
+    this.setupLighting();
   }
 
   private createGround() {
@@ -160,7 +164,94 @@ export class CityBiome extends Biome {
     this.addObject(buildingEntity.mesh);
   }
 
+  private setupLighting() {
+    // Add ambient light to simulate general city glow
+    const ambientLight = new THREE.AmbientLight(0xffffcc, 0.3);
+    this.addObject(ambientLight);
+
+    // Add a few strategic point lights for key areas
+    const createAreaLight = (x: number, z: number) => {
+      const light = new THREE.PointLight(0xffffcc, 1, 150);
+      light.position.set(
+        this.position.x + x,
+        30, // Higher placement for better coverage
+        this.position.y + z
+      );
+      this.addObject(light);
+    };
+
+    // Add lights at major intersections only
+    const blockSize = 80;
+    for (let x = -this.size.x/2; x <= this.size.x/2; x += blockSize) {
+      for (let z = -this.size.y/2; z <= this.size.y/2; z += blockSize) {
+        createAreaLight(x, z);
+      }
+    }
+  }
+
+  private createStreetLamps() {
+    const blockSize = 80;
+
+    // Only place lamps at intersections and midpoints
+    for (let x = -this.size.x/2; x <= this.size.x/2; x += blockSize) {
+      for (let z = -this.size.y/2; z <= this.size.y/2; z += blockSize) {
+        // Place lamps at intersections
+        this.placeIntersectionLamps(x, z);
+        
+        // Place lamps at midpoints between intersections
+        if (z + blockSize/2 <= this.size.y/2) {
+          this.placeMidpointLamps(x, z + blockSize/2, true);
+        }
+        if (x + blockSize/2 <= this.size.x/2) {
+          this.placeMidpointLamps(x + blockSize/2, z, false);
+        }
+      }
+    }
+  }
+
+  private placeIntersectionLamps(x: number, z: number) {
+    // Place lamps at each corner of the intersection
+    const cornerOffsets = [
+      { x: -7.5, z: -7.5 },
+      { x: -7.5, z: 7.5 },
+      { x: 7.5, z: -7.5 },
+      { x: 7.5, z: 7.5 }
+    ];
+
+    cornerOffsets.forEach(offset => {
+      const lamp = new StreetLamp();
+      lamp.mesh.position.set(
+        this.position.x + x + offset.x,
+        0,
+        this.position.y + z + offset.z
+      );
+      // Rotate lamp to face the intersection
+      lamp.mesh.rotation.y = Math.atan2(offset.x, offset.z);
+      this.streetLamps.push(lamp);
+      this.addObject(lamp.mesh);
+    });
+  }
+
+  private placeMidpointLamps(x: number, z: number, isHorizontal: boolean) {
+    // Place two lamps at the midpoint
+    [-7.5, 7.5].forEach(offset => {
+      const lamp = new StreetLamp();
+      lamp.mesh.position.set(
+        this.position.x + x + (isHorizontal ? offset : 0),
+        0,
+        this.position.y + z + (isHorizontal ? 0 : offset)
+      );
+      lamp.mesh.rotation.y = isHorizontal ? 0 : Math.PI / 2;
+      this.streetLamps.push(lamp);
+      this.addObject(lamp.mesh);
+    });
+  }
+
   public getBuildings(): Building[] {
     return this.buildings;
+  }
+
+  public getStreetLamps(): StreetLamp[] {
+    return this.streetLamps;
   }
 } 
