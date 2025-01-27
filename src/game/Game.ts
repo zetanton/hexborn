@@ -4,6 +4,7 @@ import { Monster } from '../entities/Monster';
 import { Overworld } from '../levels/Overworld';
 import { CharacterController } from '../controls/CharacterController';
 import { CityBiome } from '../levels/biomes/CityBiome';
+import { ForestBiome } from '../levels/biomes/ForestBiome';
 
 export class Game {
   private scene: THREE.Scene;
@@ -221,6 +222,28 @@ export class Game {
                         
                         characterPos.x += pushX;
                         characterPos.z += pushZ;
+                    }
+                }
+            }
+        }
+    }
+
+    // Handle tree collisions if in forest biome
+    if (currentBiome instanceof ForestBiome) {
+        for (const tree of currentBiome.getTrees()) {
+            if (this.character.checkCollision(tree)) {
+                const dx = this.character.mesh.position.x - tree.mesh.position.x;
+                const dz = this.character.mesh.position.z - tree.mesh.position.z;
+                const distance = Math.sqrt(dx * dx + dz * dz);
+                
+                if (distance < (this.character.collisionRadius + tree.collisionRadius)) {
+                    const overlap = (this.character.collisionRadius + tree.collisionRadius) - distance;
+                    if (distance > 0) {
+                        const pushX = (dx / distance) * overlap;
+                        const pushZ = (dz / distance) * overlap;
+                        
+                        this.character.mesh.position.x += pushX;
+                        this.character.mesh.position.z += pushZ;
                     }
                 }
             }

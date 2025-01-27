@@ -141,7 +141,7 @@ export class Overworld {
     const markerGeometry = new THREE.BoxGeometry(5, 30, 5);
     const markerMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
 
-    this.biomes.forEach((biome, index) => {
+    this.biomes.forEach((_biome, index) => {
         const worldX = index * this.SPACING;
         
         // Create corner markers for this biome
