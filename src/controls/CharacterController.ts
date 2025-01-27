@@ -5,7 +5,8 @@ export class CharacterController {
   private character: Character;
   private moveDirection: THREE.Vector3 = new THREE.Vector3();
   private cameraRotation: number = 0;
-  private readonly MOVEMENT_SPEED = 5;
+  private readonly MOVEMENT_SPEED = 8;
+  private readonly MAX_VELOCITY = 10;
 
   constructor(character: Character) {
     this.character = character;
@@ -68,7 +69,6 @@ export class CharacterController {
 
   update() {
     if (this.moveDirection.length() > 0) {
-      // Create a camera-relative movement direction
       const cameraRelativeMovement = new THREE.Vector3();
       
       // Forward/backward movement
@@ -83,9 +83,19 @@ export class CharacterController {
         cameraRelativeMovement.z += -Math.sin(this.cameraRotation) * this.moveDirection.x;
       }
 
-      // Normalize and apply movement
+      // Normalize and apply movement with better ground check
       cameraRelativeMovement.normalize();
-      this.character.moveInDirection(cameraRelativeMovement, this.MOVEMENT_SPEED);
+      if (this.character.isOnGround()) {
+        this.character.moveInDirection(cameraRelativeMovement, this.MOVEMENT_SPEED);
+      } else {
+        // Reduced air control
+        this.character.moveInDirection(cameraRelativeMovement, this.MOVEMENT_SPEED * 0.3);
+      }
+
+      // Clamp velocity
+      const velocity = this.character.getVelocity();
+      velocity.x = THREE.MathUtils.clamp(velocity.x, -this.MAX_VELOCITY, this.MAX_VELOCITY);
+      velocity.z = THREE.MathUtils.clamp(velocity.z, -this.MAX_VELOCITY, this.MAX_VELOCITY);
     } else {
       this.character.moveInDirection(new THREE.Vector3(), 0);
     }

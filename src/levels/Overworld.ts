@@ -1,43 +1,92 @@
 import * as THREE from 'three';
 import { Biome } from './biomes/Biome';
-import { ForestBiome } from './biomes/ForestBiome';
 import { WinterBiome } from './biomes/WinterBiome';
-import { MountainBiome } from './biomes/MountainBiome';
 import { DesertBiome } from './biomes/DesertBiome';
+import { SwampBiome } from './biomes/SwampBiome';
+import { ForestBiome } from './biomes/ForestBiome';
+import { MountainBiome } from './biomes/MountainBiome';
 import { CityBiome } from './biomes/CityBiome';
 
 export class Overworld {
   private scene: THREE.Scene;
   private biomes: Biome[] = [];
-  private readonly BIOME_SIZE = 200;
-  private readonly WORLD_SIZE = 1000;
+  private readonly BIOME_SIZE = new THREE.Vector2(100, 100);
+  private readonly WORLD_BARRIER_SIZE = 1000;
   private birds: THREE.Group[] = [];
   private clouds: THREE.Mesh[] = [];
+  private readonly SPACING = 100; // Match BIOME_SIZE to avoid gaps
+  private readonly barrierBounds = {
+    min: new THREE.Vector3(-150, -100, -100), // Adjusted to match biome grid
+    max: new THREE.Vector3(150, 100, 100)
+  };
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
+    this.setupWorld();
     this.createWorldBoundary();
     this.createOcean();
     this.createClouds();
     this.createBirds();
-    this.createBiomes();
+  }
+
+  private setupWorld() {
+    // Create sky
+    const sky = new THREE.Mesh(
+      new THREE.SphereGeometry(this.WORLD_BARRIER_SIZE, 32, 32),
+      new THREE.MeshBasicMaterial({
+        color: 0x87CEEB,
+        side: THREE.BackSide
+      })
+    );
+    this.scene.add(sky);
+
+    // Create biomes in a 3x2 grid
+    const biomeTypes = [
+      [WinterBiome, DesertBiome, SwampBiome],
+      [ForestBiome, MountainBiome, CityBiome]
+    ];
+
+    // Adjust grid positioning to create continuous landmass
+    const startX = -this.SPACING * 1.5; // Center of leftmost biomes
+    const startZ = -this.SPACING * 0.5; // Center of top row
+
+    for (let row = 0; row < 2; row++) {
+      for (let col = 0; col < 3; col++) {
+        const BiomeClass = biomeTypes[row][col];
+        const position = new THREE.Vector2(
+          startX + col * this.SPACING,
+          startZ + row * this.SPACING
+        );
+        
+        const biome = new BiomeClass(this.scene, position, this.BIOME_SIZE);
+        biome.generate();
+        this.biomes.push(biome);
+      }
+    }
+
+    // Move ocean lower to avoid clipping
+    this.createOcean(-10); // Pass lower Y position
   }
 
   private createWorldBoundary() {
     // Invisible barrier
-    const barrierGeometry = new THREE.BoxGeometry(this.WORLD_SIZE, 100, this.WORLD_SIZE);
+    const barrierGeometry = new THREE.BoxGeometry(
+      this.barrierBounds.max.x - this.barrierBounds.min.x,
+      this.barrierBounds.max.y - this.barrierBounds.min.y,
+      this.barrierBounds.max.z - this.barrierBounds.min.z
+    );
     const barrierMaterial = new THREE.MeshBasicMaterial({
       transparent: true,
       opacity: 0,
       side: THREE.BackSide
     });
     const barrier = new THREE.Mesh(barrierGeometry, barrierMaterial);
-    barrier.position.y = 50;
+    barrier.position.y = (this.barrierBounds.max.y + this.barrierBounds.min.y) / 2;
     this.scene.add(barrier);
   }
 
-  private createOcean() {
-    const oceanGeometry = new THREE.PlaneGeometry(this.WORLD_SIZE * 2, this.WORLD_SIZE * 2);
+  private createOcean(height: number = -10) {
+    const oceanGeometry = new THREE.PlaneGeometry(this.WORLD_BARRIER_SIZE * 2, this.WORLD_BARRIER_SIZE * 2);
     const oceanMaterial = new THREE.MeshStandardMaterial({
       color: 0x0077be,
       roughness: 0.0,
@@ -47,13 +96,13 @@ export class Overworld {
     });
     const ocean = new THREE.Mesh(oceanGeometry, oceanMaterial);
     ocean.rotation.x = -Math.PI / 2;
-    ocean.position.y = -5;
+    ocean.position.y = height;
     this.scene.add(ocean);
 
     // Animate ocean waves
     const animate = () => {
       const time = Date.now() * 0.001;
-      ocean.position.y = -5 + Math.sin(time) * 0.2;
+      ocean.position.y = height + Math.sin(time) * 0.2;
       requestAnimationFrame(animate);
     };
     animate();
@@ -64,7 +113,7 @@ export class Overworld {
     for (let i = 0; i < cloudCount; i++) {
       const cloud = this.createCloud();
       const angle = (i / cloudCount) * Math.PI * 2;
-      const radius = Math.random() * (this.WORLD_SIZE/2 - 50) + 50;
+      const radius = Math.random() * (this.WORLD_BARRIER_SIZE/2 - 50) + 50;
       cloud.position.set(
         Math.cos(angle) * radius,
         30 + Math.random() * 20,
@@ -128,7 +177,7 @@ export class Overworld {
     for (let i = 0; i < birdCount; i++) {
       const bird = this.createBird();
       const angle = (i / birdCount) * Math.PI * 2;
-      const radius = Math.random() * (this.WORLD_SIZE/3 - 30) + 30;
+      const radius = Math.random() * (this.WORLD_BARRIER_SIZE/3 - 30) + 30;
       bird.position.set(
         Math.cos(angle) * radius,
         40 + Math.random() * 20,
@@ -189,58 +238,24 @@ export class Overworld {
     return bird;
   }
 
-  private createBiomes() {
-    // Create a 2x3 grid of biomes
-    const biomePositions = [
-      // Top row
-      { x: -this.BIOME_SIZE, y: this.BIOME_SIZE },   // Winter
-      { x: this.BIOME_SIZE, y: this.BIOME_SIZE },    // Mountains
-      // Middle row
-      { x: -this.BIOME_SIZE, y: 0 },                 // Forest
-      { x: this.BIOME_SIZE, y: 0 },                  // Desert
-      // Bottom row
-      { x: 0, y: -this.BIOME_SIZE },                 // City
-    ];
-
-    this.biomes = [
-      new WinterBiome(
-        this.scene,
-        new THREE.Vector2(biomePositions[0].x, biomePositions[0].y),
-        new THREE.Vector2(this.BIOME_SIZE, this.BIOME_SIZE)
-      ),
-      new MountainBiome(
-        this.scene,
-        new THREE.Vector2(biomePositions[1].x, biomePositions[1].y),
-        new THREE.Vector2(this.BIOME_SIZE, this.BIOME_SIZE)
-      ),
-      new ForestBiome(
-        this.scene,
-        new THREE.Vector2(biomePositions[2].x, biomePositions[2].y),
-        new THREE.Vector2(this.BIOME_SIZE, this.BIOME_SIZE)
-      ),
-      new DesertBiome(
-        this.scene,
-        new THREE.Vector2(biomePositions[3].x, biomePositions[3].y),
-        new THREE.Vector2(this.BIOME_SIZE, this.BIOME_SIZE)
-      ),
-      new CityBiome(
-        this.scene,
-        new THREE.Vector2(biomePositions[4].x, biomePositions[4].y),
-        new THREE.Vector2(this.BIOME_SIZE, this.BIOME_SIZE)
-      )
-    ];
-
-    // Generate each biome
-    this.biomes.forEach(biome => biome.generate());
+  getBiomeAt(position: THREE.Vector3): Biome | null {
+    return this.biomes.find(biome => biome.isInBiome(position)) || null;
   }
 
   getGroundHeight(position: THREE.Vector3): number {
-    // Find which biome the position is in
-    for (const biome of this.biomes) {
-      if (biome.isInBiome(position)) {
-        return biome.getGroundHeight(position);
-      }
+    const biome = this.getBiomeAt(position);
+    if (biome) {
+      return biome.getGroundHeight(position);
     }
-    return 0; // Default height for positions outside all biomes
+    return -5; // Ocean level if outside biomes
+  }
+
+  public updateEnvironment(position: THREE.Vector3) {
+    // Update fog for each biome
+    this.biomes.forEach(biome => {
+      if ('updateFog' in biome) {
+        (biome as SwampBiome).updateFog(position);
+      }
+    });
   }
 } 

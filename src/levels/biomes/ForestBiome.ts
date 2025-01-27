@@ -2,23 +2,89 @@ import * as THREE from 'three';
 import { Biome } from './Biome';
 
 export class ForestBiome extends Biome {
+  private heightMap: number[][] = [];
+  private readonly GRID_SIZE = 100;
+
   generate(): void {
-    this.createGround();
+    this.generateHeightMap();
+    this.createForestTerrain();
     this.createTrees();
   }
 
-  private createGround() {
-    const groundGeometry = new THREE.PlaneGeometry(this.size.x, this.size.y);
-    const groundMaterial = new THREE.MeshStandardMaterial({ 
+  private generateHeightMap() {
+    for (let i = 0; i < this.GRID_SIZE; i++) {
+      this.heightMap[i] = [];
+      for (let j = 0; j < this.GRID_SIZE; j++) {
+        const x = (i / this.GRID_SIZE) * 4;
+        const y = (j / this.GRID_SIZE) * 4;
+        
+        // Calculate raw forest floor height with gentle undulation
+        const rawHeight = this.noise(x, y) * 1.5;
+        
+        // Normalize height at edges
+        const worldX = this.position.x - this.size.x/2 + (i / this.GRID_SIZE) * this.size.x;
+        const worldZ = this.position.y - this.size.y/2 + (j / this.GRID_SIZE) * this.size.y;
+        this.heightMap[i][j] = this.normalizeEdgeHeight(rawHeight, worldX, worldZ);
+      }
+    }
+  }
+
+  private createForestTerrain() {
+    const geometry = new THREE.PlaneGeometry(this.size.x, this.size.y, this.GRID_SIZE - 1, this.GRID_SIZE - 1);
+    const vertices = geometry.attributes.position.array;
+
+    for (let i = 0; i < this.GRID_SIZE; i++) {
+      for (let j = 0; j < this.GRID_SIZE; j++) {
+        const index = (i * this.GRID_SIZE + j) * 3;
+        vertices[index + 2] = this.heightMap[i][j];
+      }
+    }
+
+    geometry.attributes.position.needsUpdate = true;
+    geometry.computeVertexNormals();
+
+    const material = new THREE.MeshStandardMaterial({ 
       color: 0x355E3B,
       roughness: 0.8,
       metalness: 0.2
     });
-    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.set(this.position.x, 0, this.position.y);
-    ground.receiveShadow = true;
-    this.scene.add(ground);
+
+    const terrain = new THREE.Mesh(geometry, material);
+    terrain.rotation.x = -Math.PI / 2;
+    terrain.position.set(this.position.x, 0, this.position.y);
+    terrain.receiveShadow = true;
+    this.scene.add(terrain);
+  }
+
+  private noise(x: number, y: number): number {
+    return (Math.sin(x * 12.9898 + y * 78.233) * 43758.5453123) % 1;
+  }
+
+  override getGroundHeight(position: THREE.Vector3): number {
+    const localX = position.x - (this.position.x - this.size.x/2);
+    const localZ = position.z - (this.position.y - this.size.y/2);
+    
+    const gridX = Math.floor((localX / this.size.x) * (this.GRID_SIZE - 1));
+    const gridZ = Math.floor((localZ / this.size.y) * (this.GRID_SIZE - 1));
+    
+    if (gridX >= 0 && gridX < this.GRID_SIZE && gridZ >= 0 && gridZ < this.GRID_SIZE) {
+      // Interpolate between grid points for smoother height transitions
+      const fracX = (localX / this.size.x) * (this.GRID_SIZE - 1) - gridX;
+      const fracZ = (localZ / this.size.y) * (this.GRID_SIZE - 1) - gridZ;
+      
+      const h00 = this.heightMap[gridX][gridZ];
+      const h10 = gridX < this.GRID_SIZE - 1 ? this.heightMap[gridX + 1][gridZ] : h00;
+      const h01 = gridZ < this.GRID_SIZE - 1 ? this.heightMap[gridX][gridZ + 1] : h00;
+      const h11 = (gridX < this.GRID_SIZE - 1 && gridZ < this.GRID_SIZE - 1) ? 
+        this.heightMap[gridX + 1][gridZ + 1] : h00;
+      
+      // Bilinear interpolation
+      return h00 * (1 - fracX) * (1 - fracZ) +
+             h10 * fracX * (1 - fracZ) +
+             h01 * (1 - fracX) * fracZ +
+             h11 * fracX * fracZ;
+    }
+    return Biome.BASE_HEIGHT;
   }
 
   private createTrees() {
