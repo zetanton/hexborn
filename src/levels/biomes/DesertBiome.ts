@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { Biome } from './Biome';
+import { Cactus } from '../../entities/Cactus';
 
 export class DesertBiome extends Biome {
   private heightMap: number[][] = [];
   private readonly GRID_SIZE = 100;
+  private cacti: Cactus[] = [];
 
   protected generateTerrain(): void {
     this.generateHeightMap();
@@ -59,54 +61,17 @@ export class DesertBiome extends Biome {
   }
 
   private addCacti() {
-    // Significantly reduced cactus count
-    const cactiCount = Math.floor((this.size.x * this.size.y) / 2000); // Was 400
+    const cactiCount = Math.floor((this.size.x * this.size.y) / 2000);
     
     for (let i = 0; i < cactiCount; i++) {
       const x = this.position.x - this.size.x/2 + Math.random() * this.size.x;
       const z = this.position.y - this.size.y/2 + Math.random() * this.size.y;
       const position = new THREE.Vector3(x, 0, z);
-      this.createCactus(position);
-    }
-  }
-
-  private createCactus(position: THREE.Vector3) {
-    const cactus = new THREE.Group();
-
-    // Main body
-    const bodyHeight = 2 + Math.random() * 2;
-    const bodyGeometry = new THREE.CylinderGeometry(0.2, 0.25, bodyHeight, 8);
-    const cactusMaterial = new THREE.MeshStandardMaterial({
-      color: 0x2F4F4F,
-      roughness: 0.8
-    });
-    const body = new THREE.Mesh(bodyGeometry, cactusMaterial);
-    body.position.y = bodyHeight/2;
-    body.castShadow = true;
-    cactus.add(body);
-
-    // Add arms
-    const armCount = Math.floor(Math.random() * 3) + 1;
-    for (let i = 0; i < armCount; i++) {
-      const armHeight = 1 + Math.random();
-      const armGeometry = new THREE.CylinderGeometry(0.15, 0.15, armHeight, 8);
-      const arm = new THREE.Mesh(armGeometry, cactusMaterial);
       
-      // Position arm
-      const angle = (i / armCount) * Math.PI * 2;
-      const heightOnBody = bodyHeight * (0.3 + Math.random() * 0.4);
-      arm.position.set(
-        Math.cos(angle) * 0.3,
-        heightOnBody,
-        Math.sin(angle) * 0.3
-      );
-      arm.rotation.z = Math.PI/2 - angle;
-      arm.castShadow = true;
-      cactus.add(arm);
+      const cactus = new Cactus(position);
+      this.cacti.push(cactus);
+      this.addObject(cactus.mesh);
     }
-
-    // Place cactus with base at ground level
-    this.addGroundedObject(cactus, position, 0);
   }
 
   private noise(x: number, y: number): number {
@@ -123,5 +88,9 @@ export class DesertBiome extends Biome {
       return this.heightMap[x][z];
     }
     return Biome.BASE_HEIGHT;
+  }
+
+  public getCacti(): Cactus[] {
+    return this.cacti;
   }
 } 

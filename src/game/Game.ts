@@ -3,8 +3,7 @@ import { Character } from '../entities/Character';
 import { Monster } from '../entities/Monster';
 import { Overworld } from '../levels/Overworld';
 import { CharacterController } from '../controls/CharacterController';
-import { CityBiome } from '../levels/biomes/CityBiome';
-import { ForestBiome } from '../levels/biomes/ForestBiome';
+import { CollisionManager } from '../physics/CollisionManager';
 
 export class Game {
   private scene: THREE.Scene;
@@ -21,6 +20,7 @@ export class Game {
   private readonly MOUSE_SENSITIVITY = 0.002;
   private readonly VERTICAL_LIMIT = Math.PI / 3; // 60 degrees limit
   private isPointerLocked: boolean = false;
+  private collisionManager: CollisionManager;
 
   constructor(container: HTMLElement) {
     // Initialize scene
@@ -61,6 +61,9 @@ export class Game {
     // Initialize monsters (after character)
     this.monsters = [];
     this.spawnMonsters(5);
+
+    // Initialize collision manager with both character and monsters
+    this.collisionManager = new CollisionManager(this.character, this.monsters);
 
     // Handle window resize
     window.addEventListener('resize', () => {
@@ -174,83 +177,6 @@ export class Game {
     this.camera.lookAt(lookTarget);
   }
 
-  private handleCollisions() {
-    // Get current biome
-    const currentBiome = this.currentLevel.getBiomeAt(this.character.mesh.position);
-    
-    // Quick check if character moved significantly since last frame
-    const characterPos = this.character.mesh.position;
-    
-    // Handle monster collisions
-    for (const monster of this.monsters) {
-        // Quick distance check before detailed collision
-        const dx = characterPos.x - monster.mesh.position.x;
-        const dz = characterPos.z - monster.mesh.position.z;
-        const quickDist = dx * dx + dz * dz;
-        const minDist = (this.character.collisionRadius + monster.collisionRadius) * 2;
-        
-        if (quickDist < minDist * minDist && this.character.checkCollision(monster)) {
-            const distance = Math.sqrt(quickDist);
-            const overlap = (this.character.collisionRadius + monster.collisionRadius) - distance;
-            
-            if (distance > 0) {
-                const pushX = (dx / distance) * overlap;
-                const pushZ = (dz / distance) * overlap;
-                
-                characterPos.x += pushX;
-                characterPos.z += pushZ;
-            }
-
-            this.character.onCollideWithMonster(monster);
-            monster.onCollideWithCharacter(this.character);
-        }
-    }
-
-    // Handle building collisions if in city biome
-    if (currentBiome instanceof CityBiome) {
-        for (const building of currentBiome.getBuildings()) {
-            if (this.character.checkCollision(building)) {
-                const dx = characterPos.x - building.mesh.position.x;
-                const dz = characterPos.z - building.mesh.position.z;
-                const distance = Math.sqrt(dx * dx + dz * dz);
-                
-                if (distance < (this.character.collisionRadius + building.collisionRadius)) {
-                    const overlap = (this.character.collisionRadius + building.collisionRadius) - distance;
-                    if (distance > 0) {
-                        const pushX = (dx / distance) * overlap;
-                        const pushZ = (dz / distance) * overlap;
-                        
-                        characterPos.x += pushX;
-                        characterPos.z += pushZ;
-                    }
-                }
-            }
-        }
-    }
-
-    // Handle tree collisions if in forest biome
-    if (currentBiome instanceof ForestBiome) {
-        for (const tree of currentBiome.getTrees()) {
-            if (this.character.checkCollision(tree)) {
-                const dx = this.character.mesh.position.x - tree.mesh.position.x;
-                const dz = this.character.mesh.position.z - tree.mesh.position.z;
-                const distance = Math.sqrt(dx * dx + dz * dz);
-                
-                if (distance < (this.character.collisionRadius + tree.collisionRadius)) {
-                    const overlap = (this.character.collisionRadius + tree.collisionRadius) - distance;
-                    if (distance > 0) {
-                        const pushX = (dx / distance) * overlap;
-                        const pushZ = (dz / distance) * overlap;
-                        
-                        this.character.mesh.position.x += pushX;
-                        this.character.mesh.position.z += pushZ;
-                    }
-                }
-            }
-        }
-    }
-  }
-
   private animate = () => {
     requestAnimationFrame(this.animate);
 
@@ -269,16 +195,12 @@ export class Game {
     const velocity = this.character.getVelocity();
     const nextPosition = previousPosition.clone().add(velocity.clone().multiplyScalar(delta));
 
-    // Check collision with boundaries by testing points around the character
-    const collisionPoints = [
-        nextPosition.clone().add(new THREE.Vector3(radius, 0, 0)),  // Right
-        nextPosition.clone().add(new THREE.Vector3(-radius, 0, 0)), // Left
-        nextPosition.clone().add(new THREE.Vector3(0, 0, radius)),  // Front
-        nextPosition.clone().add(new THREE.Vector3(0, 0, -radius))  // Back
-    ];
-
-    // Only block movement if collision points would be outside valid area
-    const wouldCollide = collisionPoints.some(point => !this.currentLevel.isPositionValid(point));
+    // Check boundary collisions using collision manager
+    const wouldCollide = this.collisionManager.checkBoundaryCollision(
+        nextPosition,
+        radius,
+        (pos) => this.currentLevel.isPositionValid(pos)
+    );
 
     if (wouldCollide) {
         // If would collide, keep current position
@@ -296,7 +218,10 @@ export class Game {
     });
 
     this.updateCamera();
-    this.handleCollisions();
+    
+    // Handle entity collisions using collision manager
+    const currentBiome = this.currentLevel.getBiomeAt(this.character.mesh.position);
+    this.collisionManager.handleCollisions(currentBiome);
 
     // Render scene
     this.renderer.render(this.scene, this.camera);

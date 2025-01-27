@@ -7,6 +7,64 @@ import { ForestBiome } from './biomes/ForestBiome';
 import { MountainBiome } from './biomes/MountainBiome';
 import { CityBiome } from './biomes/CityBiome';
 
+// Vertex shader for the magical barrier
+const barrierVertexShader = `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+// Fragment shader for the magical barrier
+const barrierFragmentShader = `
+  uniform float time;
+  varying vec2 vUv;
+  
+  // Gentle sparkle function
+  float sparkle(vec2 uv, float t) {
+    float s1 = sin(uv.x * 8.0 + t * 1.0);
+    float s2 = sin(uv.y * 8.0 - t * 1.5);
+    return pow(abs(s1 * s2), 8.0) * 0.3;
+  }
+  
+  void main() {
+    // Soft pastel color palette
+    vec3 color1 = vec3(0.4, 0.6, 0.9);   // Soft blue
+    vec3 color2 = vec3(0.6, 0.4, 0.8);   // Soft purple
+    vec3 color3 = vec3(0.4, 0.7, 0.7);   // Soft cyan
+    
+    // Slower color transitions
+    float t1 = sin(time * 0.2) * 0.5 + 0.5;
+    float t2 = sin(time * 0.2 + 2.094) * 0.5 + 0.5;
+    float t3 = sin(time * 0.2 + 4.189) * 0.5 + 0.5;
+    
+    // Mix base colors
+    vec3 baseColor = color1 * t1 + color2 * t2 + color3 * t3;
+    
+    // Subtle vertical gradient
+    float gradientY = smoothstep(0.0, 1.0, vUv.y);
+    baseColor *= (0.9 + gradientY * 0.2);
+    
+    // Add gentle sparkles
+    float sparkle1 = sparkle(vUv, time);
+    float sparkle2 = sparkle(vUv * 1.5 + 0.5, time * 0.8);
+    vec3 sparkleColor = vec3(0.8, 0.8, 1.0) * (sparkle1 + sparkle2);
+    
+    // Very subtle pulse
+    float pulse = sin(time * 0.5) * 0.05 + 0.95;
+    
+    // Combine everything with reduced intensity
+    vec3 finalColor = (baseColor * pulse + sparkleColor) * 0.9;
+    
+    // Softer edges
+    float edgeAlpha = smoothstep(0.0, 0.2, vUv.y) * smoothstep(1.0, 0.8, vUv.y);
+    float alpha = 0.5 * edgeAlpha;
+    
+    gl_FragColor = vec4(finalColor, alpha);
+  }
+`;
+
 export class Overworld {
   private scene: THREE.Scene;
   private biomes: Biome[] = [];
@@ -17,6 +75,7 @@ export class Overworld {
   private readonly SPACING = 300;
   private readonly VISIBILITY_RANGE = 1500; // 5 biomes worth of distance
   private activeChunks: Set<Biome> = new Set();
+  private barriers: THREE.Mesh[] = [];
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -82,60 +141,76 @@ export class Overworld {
     // Calculate total world length based on biomes
     const worldLength = this.biomes.length * this.SPACING;
     
-    // Create visible barriers at the edges
+    // Create shader material with proper settings
+    const createBarrierWithMaterial = () => {
+      return new THREE.ShaderMaterial({
+        vertexShader: barrierVertexShader,
+        fragmentShader: barrierFragmentShader,
+        uniforms: {
+          time: { value: 0.0 }
+        },
+        transparent: true,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        blending: THREE.NormalBlending // Changed from AdditiveBlending
+      });
+    };
+
+    // Create visible barriers at the edges with larger dimensions
     const barrierGeometry = new THREE.BoxGeometry(
-        2, // Thin barrier
-        20, // Lower height for visibility
+        4, // Slightly thicker barrier
+        30, // Taller for better visibility
         this.BIOME_SIZE.y // Match biome depth
     );
-    const barrierMaterial = new THREE.MeshStandardMaterial({
-        color: 0xff0000, // Red color for visibility
-        transparent: true,
-        opacity: 0.5
-    });
 
     // Left barrier - align with first biome's left edge
-    const leftBarrier = new THREE.Mesh(barrierGeometry, barrierMaterial);
+    const leftBarrier = new THREE.Mesh(barrierGeometry, createBarrierWithMaterial());
     leftBarrier.position.set(
-        -this.BIOME_SIZE.x/2, // Align with first biome's left edge
-        10, // Half the barrier height
+        -this.BIOME_SIZE.x/2,
+        15,
         0
     );
     this.scene.add(leftBarrier);
 
     // Right barrier - align with last biome's right edge
-    const rightBarrier = new THREE.Mesh(barrierGeometry, barrierMaterial);
+    const rightBarrier = new THREE.Mesh(barrierGeometry, createBarrierWithMaterial());
     rightBarrier.position.set(
-        worldLength - this.SPACING + this.BIOME_SIZE.x/2, // Align with last biome's right edge
-        10,
+        worldLength - this.SPACING + this.BIOME_SIZE.x/2,
+        15,
         0
     );
     this.scene.add(rightBarrier);
 
     // Front and back barriers
     const sideBarrierGeometry = new THREE.BoxGeometry(
-        worldLength, // Match total world length
-        20,
-        2 // Thin barrier
+        worldLength,
+        30,
+        4
     );
 
     // Front barrier - align with biomes' front edge
-    const frontBarrier = new THREE.Mesh(sideBarrierGeometry, barrierMaterial);
+    const frontBarrier = new THREE.Mesh(sideBarrierGeometry, createBarrierWithMaterial());
     frontBarrier.position.set(
-        (worldLength - this.SPACING)/2, // Center between first and last biome
-        10,
-        this.BIOME_SIZE.y/2 // Align with biomes' front edge
+        (worldLength - this.SPACING)/2,
+        15,
+        this.BIOME_SIZE.y/2
     );
     this.scene.add(frontBarrier);
 
     // Back barrier - align with biomes' back edge
-    const backBarrier = new THREE.Mesh(sideBarrierGeometry, barrierMaterial);
+    const backBarrier = new THREE.Mesh(sideBarrierGeometry, createBarrierWithMaterial());
     backBarrier.position.set(
         (worldLength - this.SPACING)/2,
-        10,
-        -this.BIOME_SIZE.y/2 // Align with biomes' back edge
+        15,
+        -this.BIOME_SIZE.y/2
     );
     this.scene.add(backBarrier);
+
+    // Store barriers for animation
+    this.barriers = [leftBarrier, rightBarrier, frontBarrier, backBarrier];
+
+    // Start barrier animation immediately
+    this.animateBarriers();
 
     // Add debug markers at corners of all biomes
     const markerGeometry = new THREE.BoxGeometry(5, 30, 5);
@@ -378,5 +453,23 @@ export class Overworld {
     });
 
     return inBiome;
+  }
+
+  private animateBarriers() {
+    let startTime = Date.now();
+    const animate = () => {
+      const elapsedTime = (Date.now() - startTime) * 0.001; // Convert to seconds
+      this.barriers.forEach((barrier) => {
+        const material = barrier.material as THREE.ShaderMaterial;
+        material.uniforms.time.value = elapsedTime;
+        
+        // Debug: Log time value every second
+        if (Math.floor(elapsedTime) % 5 === 0) {
+          console.log('Barrier time:', elapsedTime);
+        }
+      });
+      requestAnimationFrame(animate);
+    };
+    animate();
   }
 } 
