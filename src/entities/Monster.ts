@@ -18,6 +18,8 @@ export class Monster extends Entity {
     const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x8B0000 }); // Dark red
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
     body.position.y = 0.75;
+    body.castShadow = true;
+    body.receiveShadow = true;
     this.mesh.add(body);
 
     // Create monster head
@@ -25,6 +27,8 @@ export class Monster extends Entity {
     const headMaterial = new THREE.MeshStandardMaterial({ color: 0x800000 }); // Darker red
     const head = new THREE.Mesh(headGeometry, headMaterial);
     head.position.y = 1.8;
+    head.castShadow = true;
+    head.receiveShadow = true;
     this.mesh.add(head);
 
     // Add glowing eyes
@@ -33,17 +37,19 @@ export class Monster extends Entity {
     
     const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
     leftEye.position.set(-0.15, 1.8, 0.3);
+    leftEye.castShadow = true;
     this.mesh.add(leftEye);
 
     const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
     rightEye.position.set(0.15, 1.8, 0.3);
+    rightEye.castShadow = true;
     this.mesh.add(rightEye);
   }
 
   update(delta: number, groundHeight: number) {
     this.applyGravity(delta);
     this.mesh.position.addScaledVector(this.velocity, delta);
-    this.checkGroundCollision(groundHeight, 0.75);
+    this.checkGroundCollision(groundHeight,0);
     this.applyFriction();
 
     if (this.target) {

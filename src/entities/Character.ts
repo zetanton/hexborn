@@ -735,7 +735,7 @@ export class Character extends Entity {
     // Apply physics
     this.applyGravity(delta);
     this.mesh.position.addScaledVector(this.velocity, delta);
-    this.checkGroundCollision(groundHeight, 0.75);
+    this.checkGroundCollision(groundHeight, 0.65);
     this.applyFriction();
 
     // Apply gravity and update position for jumping
@@ -744,8 +744,8 @@ export class Character extends Entity {
       this.mesh.position.y += this.jumpVelocity * delta;
 
       // Check for landing
-      if (this.mesh.position.y <= groundHeight + 0.75) {
-        this.mesh.position.y = groundHeight + 0.75;
+      if (this.mesh.position.y <= groundHeight + 0.65) {
+        this.mesh.position.y = groundHeight + 0.65;
         this.isJumping = false;
         this.jumpVelocity = 0;
       }
