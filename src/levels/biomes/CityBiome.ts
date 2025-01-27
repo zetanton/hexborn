@@ -26,8 +26,8 @@ export class CityBiome extends Biome {
   }
 
   private createRoads() {
-    const roadWidth = 5;
-    const blockSize = 20;
+    const roadWidth = 15;
+    const blockSize = 80;
     const roadMaterial = new THREE.MeshStandardMaterial({
       color: 0x1a1a1a,
       roughness: 0.8,
@@ -53,18 +53,15 @@ export class CityBiome extends Biome {
   }
 
   private createBuildings() {
-    const blockSize = 20;
-    const buildingMargin = 7;
+    const blockSize = 80;
+    const buildingMargin = 15;
     const buildingColors = [0x808080, 0x606060, 0x404040, 0xA0A0A0];
 
     for (let x = -this.size.x/2 + blockSize/2; x < this.size.x/2; x += blockSize) {
         for (let y = -this.size.y/2 + blockSize/2; y < this.size.y/2; y += blockSize) {
-            // Random chance to skip a building (empty lot)
-            if (Math.random() < 0.2) continue;
-
-            const buildingWidth = Math.min(10, blockSize - buildingMargin * 2);
-            const buildingDepth = Math.min(10, blockSize - buildingMargin * 2);
-            const buildingHeight = 5 + Math.random() * 30;
+            const buildingWidth = Math.min(40, blockSize - buildingMargin * 2);
+            const buildingDepth = Math.min(40, blockSize - buildingMargin * 2);
+            const buildingHeight = 20 + Math.random() * 100;
 
             this.createBuilding(
                 new THREE.Vector3(
@@ -92,6 +89,19 @@ export class CityBiome extends Biome {
     const buildingEntity = new Building(geometry, material);
     buildingEntity.mesh.position.copy(position);
     
+    // Add door
+    const doorHeight = 3.5;
+    const doorWidth = 2.5;
+    const doorGeometry = new THREE.BoxGeometry(doorWidth, doorHeight, 0.3);
+    const doorMaterial = new THREE.MeshStandardMaterial({
+        color: 0x4a3c2b,
+        roughness: 0.9,
+        metalness: 0.1
+    });
+    const door = new THREE.Mesh(doorGeometry, doorMaterial);
+    door.position.set(0, -height/2 + doorHeight/2, depth/2 + 0.1);
+    buildingEntity.mesh.add(door);
+    
     // Add windows
     const windowMaterial = new THREE.MeshStandardMaterial({
         color: 0x87CEEB,
@@ -99,35 +109,52 @@ export class CityBiome extends Biome {
         metalness: 0.8
     });
 
-    const windowSize = 0.5;
-    const windowSpacing = 1.5;
+    const windowSize = 3.5;
+    const windowSpacing = 7.0;
     const windowRows = Math.floor(height / windowSpacing) - 1;
     const windowCols = Math.floor(width / windowSpacing) - 1;
 
-    for (let row = 0; row < windowRows; row++) {
-        for (let col = 0; col < windowCols; col++) {
-            const windowGeometry = new THREE.BoxGeometry(windowSize, windowSize, 0.1);
-            const windowPane = new THREE.Mesh(windowGeometry, windowMaterial);
-            windowPane.position.set(
-                -width/2 + windowSpacing + col * windowSpacing,
-                -height/2 + windowSpacing + row * windowSpacing,
-                depth/2 + 0.1
-            );
-            buildingEntity.mesh.add(windowPane);
+    // Function to create windows for a side
+    const createWindowsForSide = (rotation: number, xOffset: number, zOffset: number) => {
+        for (let row = 0; row < windowRows; row++) {
+            if (row % 2 !== 0) continue;
+            
+            for (let col = 0; col < windowCols; col++) {
+                if (col % 2 !== 0) continue;
 
-            // Add windows to other sides
-            if (col === 0) {
-                const sideWindow = windowPane.clone();
-                sideWindow.rotation.y = Math.PI / 2;
-                sideWindow.position.set(
-                    -width/2 - 0.1,
-                    -height/2 + windowSpacing + row * windowSpacing,
-                    depth/2 - windowSpacing - col * windowSpacing
-                );
-                buildingEntity.mesh.add(sideWindow);
+                // Skip window position if it would intersect with the door
+                if (rotation === 0 && row === 0 && Math.abs(col * windowSpacing - width/2) < doorWidth) {
+                    continue;
+                }
+
+                const windowGeometry = new THREE.BoxGeometry(windowSize, windowSize, 0.2);
+                const windowPane = new THREE.Mesh(windowGeometry, windowMaterial);
+                windowPane.rotation.y = rotation;
+                
+                if (rotation === 0 || rotation === Math.PI) { // Front and back
+                    windowPane.position.set(
+                        -width/2 + windowSpacing + col * windowSpacing,
+                        -height/2 + windowSpacing + row * windowSpacing,
+                        zOffset
+                    );
+                } else { // Sides
+                    windowPane.position.set(
+                        xOffset,
+                        -height/2 + windowSpacing + row * windowSpacing,
+                        depth/2 - windowSpacing - col * windowSpacing
+                    );
+                }
+                
+                buildingEntity.mesh.add(windowPane);
             }
         }
-    }
+    };
+
+    // Create windows on all four sides
+    createWindowsForSide(0, 0, depth/2 + 0.1); // Front
+    createWindowsForSide(Math.PI, 0, -depth/2 - 0.1); // Back
+    createWindowsForSide(Math.PI/2, -width/2 - 0.1, 0); // Left
+    createWindowsForSide(-Math.PI/2, width/2 + 0.1, 0); // Right
 
     this.buildings.push(buildingEntity);
     this.addObject(buildingEntity.mesh);

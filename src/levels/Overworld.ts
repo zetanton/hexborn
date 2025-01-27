@@ -167,7 +167,7 @@ export class Overworld {
     const leftBarrier = new THREE.Mesh(barrierGeometry, createBarrierWithMaterial());
     leftBarrier.position.set(
         -this.BIOME_SIZE.x/2,
-        15,
+        15.1, // Slightly raised to prevent z-fighting
         0
     );
     this.scene.add(leftBarrier);
@@ -176,7 +176,7 @@ export class Overworld {
     const rightBarrier = new THREE.Mesh(barrierGeometry, createBarrierWithMaterial());
     rightBarrier.position.set(
         worldLength - this.SPACING + this.BIOME_SIZE.x/2,
-        15,
+        15.1, // Slightly raised to prevent z-fighting
         0
     );
     this.scene.add(rightBarrier);
@@ -192,7 +192,7 @@ export class Overworld {
     const frontBarrier = new THREE.Mesh(sideBarrierGeometry, createBarrierWithMaterial());
     frontBarrier.position.set(
         (worldLength - this.SPACING)/2,
-        15,
+        15.1, // Slightly raised to prevent z-fighting
         this.BIOME_SIZE.y/2
     );
     this.scene.add(frontBarrier);
@@ -201,7 +201,7 @@ export class Overworld {
     const backBarrier = new THREE.Mesh(sideBarrierGeometry, createBarrierWithMaterial());
     backBarrier.position.set(
         (worldLength - this.SPACING)/2,
-        15,
+        15.1, // Slightly raised to prevent z-fighting
         -this.BIOME_SIZE.y/2
     );
     this.scene.add(backBarrier);
