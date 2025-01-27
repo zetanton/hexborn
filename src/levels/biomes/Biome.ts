@@ -1,4 +1,4 @@
-import * as THREE from '../../../node_modules/@types/three';
+import * as THREE from 'three';
 
 export abstract class Biome {
   protected scene: THREE.Scene;
@@ -13,7 +13,7 @@ export abstract class Biome {
 
   abstract generate(): void;
   
-  getGroundHeight(position: THREE.Vector3): number {
+  getGroundHeight(_position: THREE.Vector3): number {
     // Default implementation for flat ground
     return 0;
   }

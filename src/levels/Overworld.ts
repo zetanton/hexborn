@@ -1,4 +1,4 @@
-import * as THREE from '../../node_modules/@types/three';
+import * as THREE from 'three';
 import { Biome } from './biomes/Biome';
 import { ForestBiome } from './biomes/ForestBiome';
 import { WinterBiome } from './biomes/WinterBiome';

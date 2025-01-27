@@ -1,4 +1,4 @@
-import * as THREE from '../../node_modules/@types/three';
+import * as THREE from 'three';
 import { Entity } from './Entity';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { Wireframe } from 'three/addons/lines/Wireframe.js';

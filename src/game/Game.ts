@@ -1,4 +1,4 @@
-import * as THREE from '../../node_modules/@types/three';
+import * as THREE from 'three';
 import { Character } from '../entities/Character';
 import { Monster } from '../entities/Monster';
 import { Overworld } from '../levels/Overworld';
