@@ -106,9 +106,18 @@ export class CityBiome extends Biome {
     door.position.set(0, -height/2 + doorHeight/2, depth/2 + 0.1);
     buildingEntity.mesh.add(door);
     
-    // Add windows
+    // Create shared materials for windows
     const windowMaterial = new THREE.MeshStandardMaterial({
         color: 0x87CEEB,
+        roughness: 0.2,
+        metalness: 0.8
+    });
+
+    // Create illuminated window material
+    const illuminatedWindowMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffffcc,
+        emissive: 0xffffcc,
+        emissiveIntensity: 0.6,
         roughness: 0.2,
         metalness: 0.8
     });
@@ -132,7 +141,9 @@ export class CityBiome extends Biome {
                 }
 
                 const windowGeometry = new THREE.BoxGeometry(windowSize, windowSize, 0.2);
-                const windowPane = new THREE.Mesh(windowGeometry, windowMaterial);
+                // Randomly choose between regular and illuminated window material
+                const material = Math.random() < 0.3 ? illuminatedWindowMaterial : windowMaterial;
+                const windowPane = new THREE.Mesh(windowGeometry, material);
                 windowPane.rotation.y = rotation;
                 
                 if (rotation === 0 || rotation === Math.PI) { // Front and back
@@ -180,10 +191,15 @@ export class CityBiome extends Biome {
       this.addObject(light);
     };
 
-    // Add lights at major intersections only
+    // Add lights at major intersections, excluding the outer edge
     const blockSize = 80;
     for (let x = -this.size.x/2; x <= this.size.x/2; x += blockSize) {
       for (let z = -this.size.y/2; z <= this.size.y/2; z += blockSize) {
+        // Skip if we're at the outer edge
+        if (x === -this.size.x/2 || x === this.size.x/2 ||
+            z === -this.size.y/2 || z === this.size.y/2) {
+          continue;
+        }
         createAreaLight(x, z);
       }
     }
@@ -192,17 +208,23 @@ export class CityBiome extends Biome {
   private createStreetLamps() {
     const blockSize = 80;
 
-    // Only place lamps at intersections and midpoints
+    // Place lamps at all intersections except the outer edge
     for (let x = -this.size.x/2; x <= this.size.x/2; x += blockSize) {
       for (let z = -this.size.y/2; z <= this.size.y/2; z += blockSize) {
+        // Skip if we're at the outer edge
+        if (x === -this.size.x/2 || x === this.size.x/2 ||
+            z === -this.size.y/2 || z === this.size.y/2) {
+          continue;
+        }
+        
         // Place lamps at intersections
         this.placeIntersectionLamps(x, z);
         
         // Place lamps at midpoints between intersections
-        if (z + blockSize/2 <= this.size.y/2) {
+        if (z + blockSize/2 <= this.size.y/2 && z !== -this.size.y/2) {
           this.placeMidpointLamps(x, z + blockSize/2, true);
         }
-        if (x + blockSize/2 <= this.size.x/2) {
+        if (x + blockSize/2 <= this.size.x/2 && x !== -this.size.x/2) {
           this.placeMidpointLamps(x + blockSize/2, z, false);
         }
       }
