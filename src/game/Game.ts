@@ -4,6 +4,7 @@ import { Monster } from '../entities/Monster';
 import { Overworld } from '../levels/Overworld';
 import { CharacterController } from '../controls/CharacterController';
 import { CollisionManager } from '../physics/CollisionManager';
+import { SoundManager } from '../audio/SoundManager';
 
 export class Game {
   private scene: THREE.Scene;
@@ -26,6 +27,11 @@ export class Game {
     // Initialize scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x87ceeb); // Sky blue
+
+    // Initialize sound
+    SoundManager.getInstance().initialize()
+      .then(() => SoundManager.getInstance().playTheme('overworld'))
+      .catch(console.error);
 
     // Initialize camera
     this.camera = new THREE.PerspectiveCamera(

@@ -6,6 +6,7 @@ import { SwampBiome } from './biomes/SwampBiome';
 import { ForestBiome } from './biomes/ForestBiome';
 import { MountainBiome } from './biomes/MountainBiome';
 import { CityBiome } from './biomes/CityBiome';
+import { SoundManager } from '../audio/SoundManager';
 
 // Vertex shader for the magical barrier
 const barrierVertexShader = `
@@ -87,6 +88,9 @@ export class Overworld {
     // Start the animations
     this.animateClouds();
     this.animateBirds();
+
+    // Start playing overworld theme
+    SoundManager.getInstance().playTheme('overworld');
   }
 
   private setupWorld() {

@@ -1,15 +1,25 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Game } from './game/Game';
+import { StartScreen } from './components/StartScreen';
 
 function App() {
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Game | null>(null);
+  const [gameStarted, setGameStarted] = useState(false);
 
   useEffect(() => {
-    if (containerRef.current && !gameRef.current) {
+    if (containerRef.current && gameStarted && !gameRef.current) {
       gameRef.current = new Game(containerRef.current);
     }
-  }, []);
+  }, [gameStarted]);
+
+  const handleStartGame = () => {
+    setGameStarted(true);
+  };
+
+  if (!gameStarted) {
+    return <StartScreen onStart={handleStartGame} />;
+  }
 
   return (
     <div className="relative w-full h-screen">

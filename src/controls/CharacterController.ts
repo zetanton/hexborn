@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Character } from '../entities/Character';
+import { SoundManager } from '../audio/SoundManager';
 
 export class CharacterController {
   private character: Character;
@@ -8,6 +9,7 @@ export class CharacterController {
   private readonly NORMAL_SPEED = 8;
   private readonly SPRINT_SPEED = 24; // 3x normal speed
   private isSprinting: boolean = false;
+  private isMoving: boolean = false;
 
   constructor(character: Character) {
     this.character = character;
@@ -75,6 +77,15 @@ export class CharacterController {
   }
 
   update() {
+    this.isMoving = this.moveDirection.length() > 0;
+
+    // Handle walking sound state changes
+    if (this.isMoving && this.character.isOnGround()) {
+      SoundManager.getInstance().startWalking(this.isSprinting);
+    } else if (!this.isMoving || !this.character.isOnGround()) {
+      SoundManager.getInstance().stopWalking();
+    }
+
     if (this.moveDirection.length() > 0) {
       const cameraRelativeMovement = new THREE.Vector3();
       
