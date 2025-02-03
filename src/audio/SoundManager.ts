@@ -76,7 +76,7 @@ export class SoundManager {
       if (sound) {
         sound.loop = true;
         // Different volumes for different themes
-        sound.volume = theme === 'overworld' ? 0.2 : 0.4;
+        sound.volume = theme === 'overworld' ? 0.1 : 0.4;
         await sound.play();
         this.currentTheme = sound;
       }

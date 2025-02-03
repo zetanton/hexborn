@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { Biome } from './Biome';
+import { Boulder } from '../../entities';
 
 export class MountainBiome extends Biome {
   private heightMap: number[][] = [];
   private readonly GRID_SIZE = 100;
-  private readonly MAX_HEIGHT = 30;
-  private readonly PEAK_COUNT = 5;
+  private readonly MAX_HEIGHT = 120;
 
   protected generateTerrain(): void {
     this.generateHeightMap();
@@ -14,15 +14,8 @@ export class MountainBiome extends Biome {
   }
 
   private generateHeightMap() {
-    // Generate mountain peaks
-    const peaks: Array<{x: number, z: number, height: number}> = [];
-    for (let i = 0; i < this.PEAK_COUNT; i++) {
-      peaks.push({
-        x: Math.random() * 0.4 + 0.3, // Keep peaks more centered
-        z: Math.random() * 0.4 + 0.3,
-        height: this.MAX_HEIGHT * (0.8 + Math.random() * 0.2)
-      });
-    }
+    // Generate a single centralized peak for Mt. Tamaranch style
+    const peaks = [{ x: 0.5, z: 0.5, height: this.MAX_HEIGHT }];
 
     // Initialize height map
     for (let i = 0; i < this.GRID_SIZE; i++) {
@@ -48,6 +41,22 @@ export class MountainBiome extends Biome {
 
         const detail = (this.noise(x * 8, z * 8) + 1) * 1.5;
         height += mountainHeight + detail;
+
+        // Volcano crater at the top (center at normalized (0.5, 0.5))
+        const dCenter = Math.sqrt(Math.pow(x - 0.5, 2) + Math.pow(z - 0.5, 2));
+        const craterRadius = 0.1;
+        const craterDepth = this.MAX_HEIGHT * 0.3; // 30% of MAX_HEIGHT
+        if (dCenter < craterRadius) {
+          height -= (1 - dCenter / craterRadius) * craterDepth;
+        }
+
+        // Cave entrance at the base (assume cave centered at normalized (0.5, 0.95))
+        const dCave = Math.sqrt(Math.pow(x - 0.5, 2) + Math.pow(z - 0.95, 2));
+        const caveRadius = 0.05; // Further reduced cave entrance size
+        const caveDepth = this.MAX_HEIGHT * 0.2; // 20% of MAX_HEIGHT
+        if (dCave < caveRadius) {
+          height -= (1 - dCave / caveRadius) * caveDepth;
+        }
 
         // Blend with base height at edges
         this.heightMap[i][j] = this.blendHeightWithEdge(worldX, worldZ, height);
@@ -80,17 +89,30 @@ export class MountainBiome extends Biome {
       roughness: 0.8,
     });
 
-    // Add vertex colors based on height
+    // Add vertex colors based on height and special features (volcano crater with lava, cave entry)
     const colors = [];
     for (let i = 0; i < this.GRID_SIZE; i++) {
       for (let j = 0; j < this.GRID_SIZE; j++) {
+        const nx = i / (this.GRID_SIZE - 1);
+        const nz = j / (this.GRID_SIZE - 1);
         const height = this.heightMap[i][j];
-        if (height > this.MAX_HEIGHT * 0.7) {
-          colors.push(1, 1, 1); // Snow
-        } else if (height > this.MAX_HEIGHT * 0.4) {
-          colors.push(0.5, 0.5, 0.5); // Rock
+        const craterRadius = 0.1;
+        const dCrater = Math.sqrt(Math.pow(nx - 0.5, 2) + Math.pow(nz - 0.5, 2));
+        const dCaveVert = Math.sqrt(Math.pow(nx - 0.5, 2) + Math.pow(nz - 0.95, 2));
+        const caveRadiusVert = 0.05;
+        if (dCaveVert < caveRadiusVert) {
+          // Cave entry as black
+          colors.push(0, 0, 0);
+        } else if (dCrater < craterRadius) {
+          // Bubbling lava: add slight flicker effect
+          const flicker = Math.random() * 0.1;
+          colors.push(1.0, 0.3 + flicker, 0.0);
+        } else if (height > this.MAX_HEIGHT * 0.8) {
+          colors.push(0.4, 0.2, 0.2); // Volcanic peak (reddish)
+        } else if (height > this.MAX_HEIGHT * 0.5) {
+          colors.push(0.3, 0.3, 0.3); // Rocky section (dark gray)
         } else {
-          colors.push(0.2, 0.3, 0.1); // Grass
+          colors.push(0.2, 0.15, 0.1); // Barren ground (dark brown)
         }
       }
     }
@@ -123,14 +145,8 @@ export class MountainBiome extends Biome {
   }
 
   private createRock(position: THREE.Vector3) {
-    const geometry = new THREE.DodecahedronGeometry(1 + Math.random() * 2, 0);
-    const material = new THREE.MeshStandardMaterial({
-      color: 0x808080,
-      roughness: 0.9,
-    });
-    const rock = new THREE.Mesh(geometry, material);
-    rock.castShadow = true;
-    this.addGroundedObject(rock, position, 0);
+    const boulder = new Boulder(position);
+    this.addGroundedObject(boulder.mesh, position, 0);
   }
 
   override getGroundHeight(position: THREE.Vector3): number {
