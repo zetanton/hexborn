@@ -476,4 +476,8 @@ export class Overworld {
     };
     animate();
   }
+
+  public getBiomes(): Biome[] {
+    return this.biomes;
+  }
 } 

@@ -1,16 +1,19 @@
 import * as THREE from 'three';
 import { Biome } from './Biome';
 import { Boulder } from '../../entities';
+import { Troll } from '../../entities/Troll';
 
 export class MountainBiome extends Biome {
   private heightMap: number[][] = [];
   private readonly GRID_SIZE = 100;
   private readonly MAX_HEIGHT = 120;
+  private trolls: Troll[] = [];
 
   protected generateTerrain(): void {
     this.generateHeightMap();
     this.createTerrain();
     this.addRocks();
+    this.spawnTrolls();
   }
 
   private generateHeightMap() {
@@ -181,5 +184,40 @@ export class MountainBiome extends Biome {
 
   private noise(x: number, y: number): number {
     return (Math.sin(x * 12.9898 + y * 78.233) * 43758.5453123) % 1;
+  }
+
+  private spawnTrolls() {
+    // Spawn 3 trolls at strategic locations on the mountain
+    const trollPositions = [
+      { x: 0.3, z: 0.3 },  // Near the base
+      { x: 0.5, z: 0.5 },  // Near the peak
+      { x: 0.7, z: 0.7 }   // Another side
+    ];
+
+    trollPositions.forEach(pos => {
+      const worldX = this.position.x - this.size.x/2 + pos.x * this.size.x;
+      const worldZ = this.position.y - this.size.y/2 + pos.z * this.size.y;
+      const height = this.getGroundHeight(new THREE.Vector3(worldX, 0, worldZ));
+      
+      const troll = new Troll(new THREE.Vector3(worldX, height + 1, worldZ));
+      this.trolls.push(troll);
+      this.scene.add(troll.mesh);
+    });
+  }
+
+  public update(delta: number, playerPosition: THREE.Vector3) {
+    // Update all trolls
+    this.trolls.forEach(troll => {
+      // Set player as target
+      troll.setTarget(playerPosition);
+      
+      // Update troll with current ground height
+      const groundHeight = this.getGroundHeight(troll.mesh.position);
+      troll.update(delta, groundHeight);
+    });
+  }
+
+  public getTrolls(): Troll[] {
+    return this.trolls;
   }
 } 

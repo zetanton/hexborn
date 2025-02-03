@@ -907,4 +907,26 @@ export class Character extends Entity {
         }
     }
   }
+
+  public takeDamage(amount: number, attacker: Monster) {
+    if (!this.isInvulnerable) {
+      this.health -= amount;
+      this.isInvulnerable = true;
+      this.invulnerabilityTimer = this.INVULNERABILITY_DURATION;
+      
+      // Calculate knockback direction
+      const dx = this.mesh.position.x - attacker.mesh.position.x;
+      const dz = this.mesh.position.z - attacker.mesh.position.z;
+      const distance = Math.sqrt(dx * dx + dz * dz);
+      
+      if (distance > 0) {
+        // Normalize direction and apply knockback
+        const knockbackForce = 10;
+        const upwardForce = 2;
+        this.velocity.x = (dx / distance) * knockbackForce;
+        this.velocity.y = upwardForce;
+        this.velocity.z = (dz / distance) * knockbackForce;
+      }
+    }
+  }
 } 

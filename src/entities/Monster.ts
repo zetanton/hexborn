@@ -4,7 +4,7 @@ import { Character } from './Character';
 
 export class Monster extends Entity {
   private target: THREE.Vector3 | null = null;
-  private moveSpeed: number = 3;
+  protected moveSpeed: number = 3;
 
   constructor(position: THREE.Vector3) {
     super();
@@ -59,6 +59,14 @@ export class Monster extends Entity {
 
   setTarget(target: THREE.Vector3) {
     this.target = target.clone();
+  }
+
+  protected getTarget(): THREE.Vector3 | null {
+    return this.target;
+  }
+
+  protected setMoveSpeed(speed: number) {
+    this.moveSpeed = speed;
   }
 
   private moveTowardsTarget(delta: number) {

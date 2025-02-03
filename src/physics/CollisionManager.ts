@@ -6,12 +6,18 @@ import { CityBiome } from '../levels/biomes/CityBiome';
 import { ForestBiome } from '../levels/biomes/ForestBiome';
 import { Biome } from '../levels/biomes/Biome';
 import { DesertBiome } from '../levels/biomes/DesertBiome';
+import { MountainBiome } from '../levels/biomes/MountainBiome';
+import { Troll } from '../entities/Troll';
 
 export class CollisionManager {
     constructor(
         private character: Character,
         private monsters: Monster[]
     ) {}
+
+    private isTroll(entity: Entity): entity is Troll {
+        return entity instanceof Troll;
+    }
 
     public handleCollisions(currentBiome: Biome | null) {
         if (!currentBiome) return;
@@ -27,6 +33,9 @@ export class CollisionManager {
         }
         if (currentBiome instanceof DesertBiome) {
             this.handleCactusCollisions(currentBiome);
+        }
+        if (currentBiome instanceof MountainBiome) {
+            this.handleTrollCollisions(currentBiome);
         }
     }
 
@@ -68,6 +77,28 @@ export class CollisionManager {
         for (const cactus of desertBiome.getCacti()) {
             if (this.character.checkCollision(cactus)) {
                 this.resolveCollision(this.character, cactus);
+            }
+        }
+    }
+
+    private handleTrollCollisions(mountainBiome: MountainBiome) {
+        const trolls = mountainBiome.getTrolls();
+        const characterPos = this.character.mesh.position;
+
+        for (const troll of trolls) {
+            // Quick distance check before detailed collision
+            const dx = characterPos.x - troll.mesh.position.x;
+            const dz = characterPos.z - troll.mesh.position.z;
+            const quickDist = dx * dx + dz * dz;
+            const minDist = (this.character.collisionRadius + troll.collisionRadius) * 2;
+            
+            if (quickDist < minDist * minDist && this.character.checkCollision(troll)) {
+                this.resolveCollision(this.character, troll);
+                // Use type guard to ensure troll-specific handling
+                if (this.isTroll(troll)) {
+                    this.character.onCollideWithMonster(troll);
+                    troll.onCollideWithCharacter(this.character);
+                }
             }
         }
     }

@@ -5,6 +5,7 @@ import { Overworld } from '../levels/Overworld';
 import { CharacterController } from '../controls/CharacterController';
 import { CollisionManager } from '../physics/CollisionManager';
 import { SoundManager } from '../audio/SoundManager';
+import { MountainBiome } from '../levels/biomes/MountainBiome';
 
 export class Game {
   private scene: THREE.Scene;
@@ -22,6 +23,9 @@ export class Game {
   private readonly VERTICAL_LIMIT = Math.PI / 3; // 60 degrees limit
   private isPointerLocked: boolean = false;
   private collisionManager: CollisionManager;
+  private debugMode: boolean = true;
+  private debugUIVisible: boolean = false;
+  private debugUIPanel: HTMLDivElement | null = null;
 
   constructor(container: HTMLElement) {
     // Initialize scene
@@ -80,6 +84,9 @@ export class Game {
 
     // Setup mouse controls
     this.setupMouseControls(container);
+
+    // Setup debug controls for teleporting to biomes
+    this.setupDebugControls();
 
     // Start game loop
     this.animate();
@@ -183,6 +190,64 @@ export class Game {
     this.camera.lookAt(lookTarget);
   }
 
+  private setupDebugControls(): void {
+    if (!this.debugMode) return;
+
+    // Create a simple debug UI panel
+    this.debugUIPanel = document.createElement('div');
+    this.debugUIPanel.style.position = 'absolute';
+    this.debugUIPanel.style.top = '10px';
+    this.debugUIPanel.style.left = '10px';
+    this.debugUIPanel.style.padding = '10px';
+    this.debugUIPanel.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    this.debugUIPanel.style.color = 'white';
+    this.debugUIPanel.style.fontFamily = 'monospace';
+    this.debugUIPanel.style.display = 'none';
+    this.debugUIPanel.innerHTML = '<strong>Debug Teleport Panel</strong><br>Press number keys (1-9) to teleport to a biome.';
+    document.body.appendChild(this.debugUIPanel);
+
+    document.addEventListener('keydown', (e: KeyboardEvent) => {
+      const key = e.key;
+      // Toggle debug UI panel with backtick (`) key
+      if(key === '`') {
+         this.debugUIVisible = !this.debugUIVisible;
+         if (this.debugUIPanel) {
+            this.debugUIPanel.style.display = this.debugUIVisible ? 'block' : 'none';
+         }
+         console.log(`Debug UI panel ${this.debugUIVisible ? 'opened' : 'closed'}`);
+         return;
+      }
+      
+      // Only process teleportation if the debug UI panel is open
+      if (!this.debugUIVisible) return;
+      
+      // If key is between '1' and '9'
+      if (key >= '1' && key <= '9') {
+        const biomeIndex = parseInt(key) - 1;
+        const biomes = this.currentLevel.getBiomes();
+        if (biomes && biomeIndex < biomes.length) {
+          const biome = biomes[biomeIndex];
+          const pos2D = biome.getPosition();
+          const groundY = this.currentLevel.getGroundHeight(new THREE.Vector3(pos2D.x, 0, pos2D.y));
+          let warpX = pos2D.x;
+          let warpY = groundY + 0.75;
+          let warpZ = pos2D.y;
+          // If the biome is a MountainBiome, adjust warp based on biome index
+          if (biome instanceof MountainBiome) {
+            if (biomeIndex === 4) {
+              warpX = pos2D.x + 150; // Warp to the very edge for Mountain Biome 5
+            } else {
+              warpY = groundY + 50;
+            }
+          }
+          this.character.mesh.position.set(warpX, warpY, warpZ);
+          this.character.getVelocity().set(0, 0, 0);
+          console.log(`Teleported to biome ${biomeIndex + 1} at (x: ${warpX}, y: ${warpY}, z: ${warpZ})`);
+        }
+      }
+    });
+  }
+
   private animate = () => {
     requestAnimationFrame(this.animate);
 
@@ -218,15 +283,21 @@ export class Game {
         this.character.update(delta, this.currentLevel.getGroundHeight(nextPosition));
     }
     
+    // Update monsters
     this.monsters.forEach(monster => {
         monster.setTarget(this.character.mesh.position);
         monster.update(delta, this.currentLevel.getGroundHeight(monster.mesh.position));
     });
 
+    // Update biome-specific entities (like trolls)
+    const currentBiome = this.currentLevel.getBiomeAt(this.character.mesh.position);
+    if (currentBiome && currentBiome instanceof MountainBiome) {
+        currentBiome.update(delta, this.character.mesh.position);
+    }
+
     this.updateCamera();
     
     // Handle entity collisions using collision manager
-    const currentBiome = this.currentLevel.getBiomeAt(this.character.mesh.position);
     this.collisionManager.handleCollisions(currentBiome);
 
     // Render scene
