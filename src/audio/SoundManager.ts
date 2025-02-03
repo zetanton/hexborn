@@ -28,9 +28,8 @@ export class SoundManager {
       ]);
       
       this.isInitialized = true;
-      console.log('Sound manager initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize sound manager:', error);
+      // No error logging
     }
   }
 
@@ -52,16 +51,14 @@ export class SoundManager {
       await loadPromise;
       
       this.sounds.set(key, audio);
-      console.log(`Loaded sound: ${key}`);
     } catch (error) {
-      console.error(`Error loading sound ${key}:`, error);
+      // No error logging for sound loading
       throw error;
     }
   }
 
   public async playTheme(theme: 'theme' | 'overworld'): Promise<void> {
     if (!this.isInitialized) {
-      console.warn('Attempting to play theme before initialization');
       return;
     }
 
@@ -81,7 +78,7 @@ export class SoundManager {
         this.currentTheme = sound;
       }
     } catch (error) {
-      console.error('Error playing theme:', error);
+      // No theme error logging
     }
   }
 
@@ -105,7 +102,7 @@ export class SoundManager {
         await this.walkingSound.play();
       }
     } catch (error) {
-      console.error('Error playing walking sound:', error);
+      // No walking sound error logging
     }
   }
 

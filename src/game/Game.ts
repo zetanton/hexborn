@@ -35,7 +35,7 @@ export class Game {
     // Initialize sound
     SoundManager.getInstance().initialize()
       .then(() => SoundManager.getInstance().playTheme('overworld'))
-      .catch(console.error);
+      .catch(() => {/* Handle sound initialization error silently */});
 
     // Initialize camera
     this.camera = new THREE.PerspectiveCamera(
@@ -214,7 +214,6 @@ export class Game {
          if (this.debugUIPanel) {
             this.debugUIPanel.style.display = this.debugUIVisible ? 'block' : 'none';
          }
-         console.log(`Debug UI panel ${this.debugUIVisible ? 'opened' : 'closed'}`);
          return;
       }
       
@@ -242,7 +241,6 @@ export class Game {
           }
           this.character.mesh.position.set(warpX, warpY, warpZ);
           this.character.getVelocity().set(0, 0, 0);
-          console.log(`Teleported to biome ${biomeIndex + 1} at (x: ${warpX}, y: ${warpY}, z: ${warpZ})`);
         }
       }
     });

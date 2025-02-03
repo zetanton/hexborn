@@ -225,7 +225,7 @@ export function StartScreen({ onStart }: { onStart: () => void }) {
     // Initialize sound manager but don't play yet
     SoundManager.getInstance().initialize()
       .then(() => setIsSoundInitialized(true))
-      .catch(console.error);
+      .catch(() => {/* Handle theme error silently */});
 
     const scene = sceneRef.current;
     window.addEventListener('resize', scene.handleResize);
@@ -245,7 +245,7 @@ export function StartScreen({ onStart }: { onStart: () => void }) {
       try {
         await SoundManager.getInstance().playTheme('theme');
       } catch (error) {
-        console.error('Failed to play theme:', error);
+        /* Handle theme error silently */
       }
     }
   };

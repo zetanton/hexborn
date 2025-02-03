@@ -466,11 +466,6 @@ export class Overworld {
       this.barriers.forEach((barrier) => {
         const material = barrier.material as THREE.ShaderMaterial;
         material.uniforms.time.value = elapsedTime;
-        
-        // Debug: Log time value every second
-        if (Math.floor(elapsedTime) % 5 === 0) {
-          console.log('Barrier time:', elapsedTime);
-        }
       });
       requestAnimationFrame(animate);
     };
