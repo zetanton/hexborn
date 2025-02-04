@@ -418,23 +418,16 @@ export class Overworld {
     return 1000; // Effectively blocks movement
   }
 
-  public updateVisibleChunks(playerPosition: THREE.Vector3): void {
-    // Keep all biomes visible, just update fog and effects
-    this.biomes.forEach(biome => {
-      // Update fog density based on distance
-      if ('updateFog' in biome) {
-        (biome as SwampBiome).updateFog(playerPosition);
-      }
-    });
-  }
-
   public updateEnvironment(position: THREE.Vector3): void {
-    this.updateVisibleChunks(position);
-    
     // Update fog and other environmental effects
     this.biomes.forEach(biome => {
-      if ('updateFog' in biome) {
-        (biome as SwampBiome).updateFog(position);
+      // Update biome-specific effects
+      if (biome instanceof SwampBiome) {
+        // Update fog only for the swamp biome
+        biome.updateFog(position);
+        biome.update(1/60, position); // Update frogs and other entities
+      } else if (biome instanceof MountainBiome) {
+        biome.update(1/60, position); // Update trolls
       }
     });
   }

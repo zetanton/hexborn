@@ -1,11 +1,21 @@
 import * as THREE from 'three';
 import { Biome } from './Biome';
+import { LilyPad } from '../../entities/LilyPad';
+import { Frog } from '../../entities/Frog';
 
 export class SwampBiome extends Biome {
   private heightMap: number[][] = [];
   private readonly GRID_SIZE = 100;
   private readonly WATER_LEVEL = 0.5;
+  private readonly FOG_TRANSITION_SPEED = 0.05; // Controls how fast fog changes
+  private readonly FOG_COLOR = 0x2f4f2f; // Darker swamp green
+  private readonly FOG_NEAR = 10; // Closer fog start
+  private readonly FOG_FAR = 50; // Shorter view distance
   private fog: THREE.Fog | null = null;
+  private currentFogDensity: number = 0;
+  private targetFogDensity: number = 0;
+  private lilyPads: LilyPad[] = [];
+  private frogs: Frog[] = [];
 
   protected generateTerrain(): void {
     this.generateHeightMap();
@@ -13,6 +23,8 @@ export class SwampBiome extends Biome {
     this.createSwampWater();
     this.createVegetation();
     this.createFog();
+    this.createLilyPads();
+    this.createFrogs();
   }
 
   private generateHeightMap() {
@@ -168,11 +180,24 @@ export class SwampBiome extends Biome {
 
   private createFog() {
     // Store fog settings but don't apply to scene directly
-    this.fog = new THREE.Fog(0x2f4f2f, 10, 50);
+    this.fog = new THREE.Fog(this.FOG_COLOR, this.FOG_NEAR, this.FOG_FAR);
   }
 
   public updateFog(position: THREE.Vector3) {
-    if (this.isInBiome(position)) {
+    if (!this.fog) return;
+    
+    // Set target fog density based on position
+    this.targetFogDensity = this.isInBiome(position) ? 1 : 0;
+    
+    // Smoothly interpolate current fog density
+    this.currentFogDensity += (this.targetFogDensity - this.currentFogDensity) * this.FOG_TRANSITION_SPEED;
+    
+    // Apply fog with current density
+    if (this.currentFogDensity > 0.01) { // Only apply fog if it's visible
+      this.fog.color.setHex(this.FOG_COLOR);
+      // Interpolate fog distances based on density
+      this.fog.near = this.FOG_NEAR + (100 - this.FOG_NEAR) * (1 - this.currentFogDensity);
+      this.fog.far = this.FOG_FAR + (200 - this.FOG_FAR) * (1 - this.currentFogDensity);
       this.scene.fog = this.fog;
     } else if (this.scene.fog === this.fog) {
       this.scene.fog = null;
@@ -200,5 +225,117 @@ export class SwampBiome extends Biome {
     }
     
     return Biome.BASE_HEIGHT;
+  }
+
+  private createLilyPads() {
+    const lilyPadCount = 15; // Number of lily pads to create
+    const minDistance = 8; // Minimum distance between lily pads
+
+    for (let i = 0; i < lilyPadCount; i++) {
+      let attempts = 0;
+      let position = new THREE.Vector3();
+      let validPosition = false;
+
+      // Try to find a valid position
+      while (!validPosition && attempts < 50) {
+        const x = this.position.x - this.size.x/2 + Math.random() * this.size.x;
+        const z = this.position.y - this.size.y/2 + Math.random() * this.size.y;
+        position.set(x, this.WATER_LEVEL, z);
+
+        // Check distance from other lily pads
+        validPosition = true;
+        for (const existingPad of this.lilyPads) {
+          const distance = position.distanceTo(existingPad.mesh.position);
+          if (distance < minDistance) {
+            validPosition = false;
+            break;
+          }
+        }
+
+        // Check if position is above deep enough water
+        const groundHeight = this.getGroundHeight(position);
+        if (groundHeight > this.WATER_LEVEL - 0.3) {
+          validPosition = false;
+        }
+
+        attempts++;
+      }
+
+      if (validPosition) {
+        const size = 2 + Math.random() * 2; // Random size between 2 and 4
+        const lilyPad = new LilyPad(size);
+        lilyPad.mesh.position.copy(position);
+        this.lilyPads.push(lilyPad);
+        this.addObject(lilyPad.mesh);
+      }
+    }
+  }
+
+  private createFrogs() {
+    const frogCount = 5; // Number of frogs to create
+    const minDistance = 20; // Minimum distance between frogs
+
+    for (let i = 0; i < frogCount; i++) {
+      let attempts = 0;
+      let position = new THREE.Vector3();
+      let validPosition = false;
+
+      // Try to find a valid position
+      while (!validPosition && attempts < 50) {
+        const x = this.position.x - this.size.x/2 + Math.random() * this.size.x;
+        const z = this.position.y - this.size.y/2 + Math.random() * this.size.y;
+        const groundHeight = this.getGroundHeight(new THREE.Vector3(x, 0, z));
+        position.set(x, groundHeight + 0.75, z);
+
+        // Check distance from other frogs
+        validPosition = true;
+        for (const existingFrog of this.frogs) {
+          const distance = position.distanceTo(existingFrog.mesh.position);
+          if (distance < minDistance) {
+            validPosition = false;
+            break;
+          }
+        }
+
+        // Check if position is on relatively solid ground
+        if (groundHeight < this.WATER_LEVEL - 0.2) {
+          validPosition = false;
+        }
+
+        attempts++;
+      }
+
+      if (validPosition) {
+        const frog = new Frog(position);
+        this.frogs.push(frog);
+        this.addObject(frog.mesh);
+      }
+    }
+  }
+
+  update(delta: number, playerPosition: THREE.Vector3): void {
+    // Update fog
+    this.updateFog(playerPosition);
+
+    // Update lily pads
+    for (const lilyPad of this.lilyPads) {
+      lilyPad.update(delta);
+    }
+
+    // Update frogs
+    for (const frog of this.frogs) {
+      frog.update(delta, this.getGroundHeight(frog.mesh.position));
+      frog.setTarget(playerPosition);
+    }
+  }
+
+  // Add getter for frogs (for collision handling)
+  public getFrogs(): Frog[] {
+    return this.frogs;
+  }
+
+  // Add getter for lily pads (for collision handling)
+  public getLilyPads(): LilyPad[] {
+    return this.lilyPads;
   }
 } 

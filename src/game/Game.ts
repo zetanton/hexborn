@@ -6,6 +6,7 @@ import { CharacterController } from '../controls/CharacterController';
 import { CollisionManager } from '../physics/CollisionManager';
 import { SoundManager } from '../audio/SoundManager';
 import { MountainBiome } from '../levels/biomes/MountainBiome';
+import { SwampBiome } from '../levels/biomes/SwampBiome';
 
 export class Game {
   private scene: THREE.Scene;
@@ -289,9 +290,14 @@ export class Game {
 
     // Update biome-specific entities (like trolls)
     const currentBiome = this.currentLevel.getBiomeAt(this.character.mesh.position);
-    if (currentBiome && currentBiome instanceof MountainBiome) {
-        currentBiome.update(delta, this.character.mesh.position);
+    if (currentBiome) {
+        if (currentBiome instanceof MountainBiome || currentBiome instanceof SwampBiome) {
+            currentBiome.update(delta, this.character.mesh.position);
+        }
     }
+
+    // Update environment effects (fog, etc.)
+    this.currentLevel.updateEnvironment(this.character.mesh.position);
 
     this.updateCamera();
     

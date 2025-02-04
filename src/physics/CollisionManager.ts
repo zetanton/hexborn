@@ -7,7 +7,9 @@ import { ForestBiome } from '../levels/biomes/ForestBiome';
 import { Biome } from '../levels/biomes/Biome';
 import { DesertBiome } from '../levels/biomes/DesertBiome';
 import { MountainBiome } from '../levels/biomes/MountainBiome';
+import { SwampBiome } from '../levels/biomes/SwampBiome';
 import { Troll } from '../entities/Troll';
+import { Frog } from '../entities/Frog';
 
 export class CollisionManager {
     constructor(
@@ -17,6 +19,10 @@ export class CollisionManager {
 
     private isTroll(entity: Entity): entity is Troll {
         return entity instanceof Troll;
+    }
+
+    private isFrog(entity: Entity): entity is Frog {
+        return entity instanceof Frog;
     }
 
     public handleCollisions(currentBiome: Biome | null) {
@@ -36,6 +42,9 @@ export class CollisionManager {
         }
         if (currentBiome instanceof MountainBiome) {
             this.handleTrollCollisions(currentBiome);
+        }
+        if (currentBiome instanceof SwampBiome) {
+            this.handleSwampCollisions(currentBiome);
         }
     }
 
@@ -98,6 +107,40 @@ export class CollisionManager {
                 if (this.isTroll(troll)) {
                     this.character.onCollideWithMonster(troll);
                     troll.onCollideWithCharacter(this.character);
+                }
+            }
+        }
+    }
+
+    private handleSwampCollisions(swampBiome: SwampBiome) {
+        // Handle frog collisions
+        for (const frog of swampBiome.getFrogs()) {
+            const characterPos = this.character.mesh.position;
+            const dx = characterPos.x - frog.mesh.position.x;
+            const dz = characterPos.z - frog.mesh.position.z;
+            const quickDist = dx * dx + dz * dz;
+            const minDist = (this.character.collisionRadius + frog.collisionRadius) * 2;
+            
+            if (quickDist < minDist * minDist && this.character.checkCollision(frog)) {
+                this.resolveCollision(this.character, frog);
+                // Use type guard to ensure frog-specific handling
+                if (this.isFrog(frog)) {
+                    this.character.onCollideWithMonster(frog);
+                    frog.onCollideWithCharacter(this.character);
+                }
+            }
+        }
+
+        // Handle lily pad collisions
+        for (const lilyPad of swampBiome.getLilyPads()) {
+            if (this.character.checkCollision(lilyPad)) {
+                // Only resolve collision if character is above the lily pad
+                if (this.character.mesh.position.y > lilyPad.mesh.position.y) {
+                    // Adjust character position to stand on lily pad
+                    this.character.mesh.position.y = Math.max(
+                        this.character.mesh.position.y,
+                        lilyPad.mesh.position.y + 0.1 // Small offset to prevent z-fighting
+                    );
                 }
             }
         }

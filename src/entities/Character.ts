@@ -858,6 +858,10 @@ export class Character extends Entity {
     this._castingType = null;
   }
 
+  get castingType(): 'fire' | 'ice' | null {
+    return this._castingType;
+  }
+
   moveInDirection(direction: THREE.Vector3, speed: number) {
     if (direction.length() > 0) {
       direction.normalize();

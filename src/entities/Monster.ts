@@ -3,12 +3,14 @@ import { Entity } from './Entity';
 import { Character } from './Character';
 
 export class Monster extends Entity {
-  private target: THREE.Vector3 | null = null;
+  protected target: THREE.Vector3 | null = null;
   protected moveSpeed: number = 3;
 
-  constructor(position: THREE.Vector3) {
+  constructor(position: THREE.Vector3, createDefaultMesh: boolean = true) {
     super();
-    this.createMonsterMesh();
+    if (createDefaultMesh) {
+      this.createMonsterMesh();
+    }
     this.mesh.position.copy(position);
   }
 
