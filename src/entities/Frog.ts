@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Monster } from './Monster';
 import { Character } from './Character';
+import { LilyPad } from './LilyPad';
 
 enum FrogState {
     RESTING,
@@ -20,7 +21,6 @@ export class Frog extends Monster {
     private readonly MAX_HOP_DISTANCE = 8;
     private readonly MIN_HOP_DISTANCE = 3;
     private readonly AGGRO_RANGE = 12; // Reduced aggro range
-    private readonly PLAYER_CHASE_CHANCE = 0.1; // Reduced chase chance
     private readonly REST_TIME_MIN = 4; // Minimum rest time
     private readonly REST_TIME_MAX = 8; // Maximum rest time
     private readonly WALK_TIME_MIN = 2; // Minimum walk time
@@ -41,7 +41,7 @@ export class Frog extends Monster {
     private currentState: FrogState = FrogState.RESTING;
     private stateTimer: number = 0;
     private walkDirection: THREE.Vector3 = new THREE.Vector3();
-    private lastStateChangeTime: number = 0;
+    private currentLilyPad: LilyPad | null = null;
 
     constructor(position: THREE.Vector3) {
         super(position);
@@ -61,8 +61,6 @@ export class Frog extends Monster {
         if (this.currentState === FrogState.WALKING) {
             this.pickNewWalkDirection();
         }
-        // Randomize last state change time so frogs aren't synchronized
-        this.lastStateChangeTime = -Math.random() * 5;
     }
 
     private getRandomTimeForState(state: FrogState): number {
@@ -102,6 +100,20 @@ export class Frog extends Monster {
 
     public setSwampBounds(min: THREE.Vector2, max: THREE.Vector2) {
         this.swampBounds = { min, max };
+    }
+
+    public setLilyPad(lilyPad: LilyPad): void {
+        this.currentLilyPad = lilyPad;
+        // Position the frog on the lily pad
+        const lilyPadPos = lilyPad.mesh.position;
+        this.mesh.position.copy(lilyPadPos);
+        this.mesh.position.y += 0.5; // Position slightly above lily pad
+        
+        // Random position within the lily pad's radius
+        const angle = Math.random() * Math.PI * 2;
+        const radius = Math.random() * (lilyPad.collisionRadius * 0.5); // Stay within inner half of lily pad
+        this.mesh.position.x += Math.cos(angle) * radius;
+        this.mesh.position.z += Math.sin(angle) * radius;
     }
 
     protected createMonsterMesh(): void {
@@ -218,6 +230,13 @@ export class Frog extends Monster {
     update(delta: number, groundHeight: number): void {
         super.update(delta, groundHeight);
 
+        // Update position based on lily pad if we're on one
+        if (this.currentLilyPad) {
+            const lilyPadPos = this.currentLilyPad.mesh.position;
+            const floatOffset = this.currentLilyPad.getFloatOffset();
+            this.mesh.position.y = lilyPadPos.y + floatOffset + 0.5; // Position slightly above lily pad and sync with its movement
+        }
+
         // Update cooldowns
         if (this.attackCooldown > 0) {
             this.attackCooldown -= delta;
@@ -292,6 +311,11 @@ export class Frog extends Monster {
                     this.stateTimer = this.getRandomTimeForState(FrogState.RESTING);
                 }
                 break;
+        }
+
+        // Clear current lily pad when hopping
+        if (this.isHopping) {
+            this.currentLilyPad = null;
         }
     }
 

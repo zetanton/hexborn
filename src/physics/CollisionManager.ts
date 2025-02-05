@@ -12,6 +12,7 @@ import { Troll } from '../entities/Troll';
 import { Frog } from '../entities/Frog';
 
 export class CollisionManager {
+
     constructor(
         private character: Character,
         private monsters: Monster[]
@@ -123,7 +124,6 @@ export class CollisionManager {
             
             if (quickDist < minDist * minDist && this.character.checkCollision(frog)) {
                 this.resolveCollision(this.character, frog);
-                // Use type guard to ensure frog-specific handling
                 if (this.isFrog(frog)) {
                     this.character.onCollideWithMonster(frog);
                     frog.onCollideWithCharacter(this.character);
@@ -132,37 +132,35 @@ export class CollisionManager {
         }
 
         // Handle lily pad collisions
+        let foundPad = false;
         for (const lilyPad of swampBiome.getLilyPads()) {
             const characterPos = this.character.mesh.position;
             const lilyPadPos = lilyPad.mesh.position;
             const characterVelocity = this.character.getVelocity();
 
-            // Check if character is within the horizontal bounds of the lily pad
+            // Check if character is within horizontal bounds of the lily pad
             const dx = characterPos.x - lilyPadPos.x;
             const dz = characterPos.z - lilyPadPos.z;
             const horizontalDist = Math.sqrt(dx * dx + dz * dz);
 
             if (horizontalDist <= lilyPad.collisionRadius) {
-                const lilyPadY = lilyPadPos.y;
-                const targetY = lilyPadY + 0.5 + lilyPad.getFloatOffset();
-                const heightDiff = characterPos.y - targetY;
-
-                // If character is above or near the lily pad surface
-                if (heightDiff >= -0.5 && heightDiff <= 1.0) {
-                    // If falling or already on the lily pad
-                    if (characterVelocity.y <= 0 || Math.abs(heightDiff) < 0.1) {
-                        this.character.mesh.position.y = targetY;
+                const targetY = lilyPadPos.y + 0.5 + lilyPad.getFloatOffset();
+                // Only adjust if character's vertical velocity is low (falling or nearly stationary)
+                if (characterVelocity.y <= 0.1) {
+                    this.character.mesh.position.y = targetY;
+                    if (characterVelocity.y < 0) {
                         characterVelocity.y = 0;
-                        // Set character as grounded when on lily pad
-                        if (this.character instanceof Entity) {
-                            (this.character as any).isGrounded = true;
-                        }
                     }
-                } else if (heightDiff < -0.5) {
-                    // Below the lily pad, handle as solid collision
-                    this.resolveCollision(this.character, lilyPad);
+                    if (this.character instanceof Entity) {
+                        (this.character as any).isGrounded = true;
+                    }
+                    foundPad = true;
                 }
             }
+        }
+
+        // Clear current lily pad if none found
+        if (!foundPad) {
         }
     }
 

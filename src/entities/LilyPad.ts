@@ -4,11 +4,11 @@ import { Entity } from './Entity';
 export class LilyPad extends Entity {
     private originalY: number = 0;
     private animationTime: number = 0;
-    private readonly FLOAT_AMPLITUDE = 0.05;
-    private readonly FLOAT_SPEED = 0.5;
+    private readonly FLOAT_AMPLITUDE = 0.025;
+    private readonly FLOAT_SPEED = 0.25;
     private floatOffset: number = 0;
 
-    constructor(size: number = 3) {
+    constructor(size: number = 6) {
         super();
         this.collisionRadius = size * 0.9; // Keep full size collision
 
