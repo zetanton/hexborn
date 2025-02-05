@@ -133,14 +133,34 @@ export class CollisionManager {
 
         // Handle lily pad collisions
         for (const lilyPad of swampBiome.getLilyPads()) {
-            if (this.character.checkCollision(lilyPad)) {
-                // Only resolve collision if character is above the lily pad
-                if (this.character.mesh.position.y > lilyPad.mesh.position.y) {
-                    // Adjust character position to stand on lily pad
-                    this.character.mesh.position.y = Math.max(
-                        this.character.mesh.position.y,
-                        lilyPad.mesh.position.y + 0.1 // Small offset to prevent z-fighting
-                    );
+            const characterPos = this.character.mesh.position;
+            const lilyPadPos = lilyPad.mesh.position;
+            const characterVelocity = this.character.getVelocity();
+
+            // Check if character is within the horizontal bounds of the lily pad
+            const dx = characterPos.x - lilyPadPos.x;
+            const dz = characterPos.z - lilyPadPos.z;
+            const horizontalDist = Math.sqrt(dx * dx + dz * dz);
+
+            if (horizontalDist <= lilyPad.collisionRadius) {
+                const lilyPadY = lilyPadPos.y;
+                const targetY = lilyPadY + 0.5 + lilyPad.getFloatOffset();
+                const heightDiff = characterPos.y - targetY;
+
+                // If character is above or near the lily pad surface
+                if (heightDiff >= -0.5 && heightDiff <= 1.0) {
+                    // If falling or already on the lily pad
+                    if (characterVelocity.y <= 0 || Math.abs(heightDiff) < 0.1) {
+                        this.character.mesh.position.y = targetY;
+                        characterVelocity.y = 0;
+                        // Set character as grounded when on lily pad
+                        if (this.character instanceof Entity) {
+                            (this.character as any).isGrounded = true;
+                        }
+                    }
+                } else if (heightDiff < -0.5) {
+                    // Below the lily pad, handle as solid collision
+                    this.resolveCollision(this.character, lilyPad);
                 }
             }
         }
