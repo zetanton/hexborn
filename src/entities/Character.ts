@@ -882,7 +882,7 @@ export class Character extends Entity {
 
   public onCollideWithMonster(monster: Monster) {
     if (!this.isInvulnerable) {
-        this.health -= 10;
+        this.health -= monster.getDamage();
         this.isInvulnerable = true;
         this.invulnerabilityTimer = this.INVULNERABILITY_DURATION;
         

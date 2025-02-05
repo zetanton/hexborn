@@ -2,56 +2,19 @@ import * as THREE from 'three';
 import { Entity } from './Entity';
 import { Character } from './Character';
 
-export class Monster extends Entity {
+export abstract class Monster extends Entity {
   protected target: THREE.Vector3 | null = null;
   protected moveSpeed: number = 3;
 
-  constructor(position: THREE.Vector3, createDefaultMesh: boolean = true) {
+  constructor(position: THREE.Vector3) {
     super();
-    if (createDefaultMesh) {
-      this.createMonsterMesh();
-    }
     this.mesh.position.copy(position);
-  }
-
-  private createMonsterMesh() {
-    // Create monster body
-    const bodyGeometry = new THREE.BoxGeometry(0.8, 1.5, 0.8);
-    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x8B0000 }); // Dark red
-    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    body.position.y = 0.75;
-    body.castShadow = true;
-    body.receiveShadow = true;
-    this.mesh.add(body);
-
-    // Create monster head
-    const headGeometry = new THREE.BoxGeometry(0.6, 0.6, 0.6);
-    const headMaterial = new THREE.MeshStandardMaterial({ color: 0x800000 }); // Darker red
-    const head = new THREE.Mesh(headGeometry, headMaterial);
-    head.position.y = 1.8;
-    head.castShadow = true;
-    head.receiveShadow = true;
-    this.mesh.add(head);
-
-    // Add glowing eyes
-    const eyeGeometry = new THREE.SphereGeometry(0.1, 8, 8);
-    const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0xFF0000, emissive: 0xFF0000 });
-    
-    const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-    leftEye.position.set(-0.15, 1.8, 0.3);
-    leftEye.castShadow = true;
-    this.mesh.add(leftEye);
-
-    const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-    rightEye.position.set(0.15, 1.8, 0.3);
-    rightEye.castShadow = true;
-    this.mesh.add(rightEye);
   }
 
   update(delta: number, groundHeight: number) {
     this.applyGravity(delta);
     this.mesh.position.addScaledVector(this.velocity, delta);
-    this.checkGroundCollision(groundHeight,0);
+    this.checkGroundCollision(groundHeight, 0);
     this.applyFriction();
 
     if (this.target) {
@@ -71,7 +34,7 @@ export class Monster extends Entity {
     this.moveSpeed = speed;
   }
 
-  private moveTowardsTarget(delta: number) {
+  protected moveTowardsTarget(delta: number) {
     if (!this.target || !this.isGrounded) return;
 
     const direction = this.target.clone().sub(this.mesh.position);
@@ -103,4 +66,8 @@ export class Monster extends Entity {
         this.velocity.z -= dotProduct * dirZ;
     }
   }
+
+  // Abstract methods that derived classes must implement
+  protected abstract createMonsterMesh(): void;
+  public abstract getDamage(): number;
 } 

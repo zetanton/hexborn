@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Character } from '../entities/Character';
 import { Monster } from '../entities/Monster';
+import { RedLurker } from '../entities/RedLurker';
 import { Overworld } from '../levels/Overworld';
 import { CharacterController } from '../controls/CharacterController';
 import { CollisionManager } from '../physics/CollisionManager';
@@ -162,7 +163,7 @@ export class Game {
         0.75, // Set to same height as character
         Math.sin(angle) * distance
       );
-      const monster = new Monster(position);
+      const monster = new RedLurker(position);
       this.monsters.push(monster);
       this.scene.add(monster.mesh);
     }

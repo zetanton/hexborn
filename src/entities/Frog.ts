@@ -24,13 +24,17 @@ export class Frog extends Monster {
     private bodyGroup: THREE.Group;
 
     constructor(position: THREE.Vector3) {
-        super(position, false);
+        super(position);
         this.collisionRadius = 2;
         this.bodyGroup = new THREE.Group();
         this.mesh.add(this.bodyGroup);
-        this.createFrogMesh();
+        this.createMonsterMesh();
         this.createTongue();
         this.setMoveSpeed(5); // Faster base movement speed
+    }
+
+    protected createMonsterMesh(): void {
+        this.createFrogMesh();
     }
 
     private createFrogMesh() {
@@ -363,7 +367,11 @@ export class Frog extends Monster {
 
         const hitDistance = tongueHead.distanceTo(this.target.mesh.position);
         if (hitDistance < this.target.collisionRadius + 0.5) {
-            (this.target as Character).takeDamage(this.DAMAGE, this);
+            this.target.takeDamage(this.DAMAGE, this);
         }
+    }
+
+    public getDamage(): number {
+        return this.DAMAGE;
     }
 } 
