@@ -3,7 +3,7 @@ import { Entity } from './Entity';
 import { Character } from './Character';
 
 export abstract class Monster extends Entity {
-  protected target: THREE.Vector3 | null = null;
+  protected target: Character | THREE.Vector3 | null = null;
   protected moveSpeed: number = 3;
 
   constructor(position: THREE.Vector3) {
@@ -22,11 +22,11 @@ export abstract class Monster extends Entity {
     }
   }
 
-  setTarget(target: THREE.Vector3) {
-    this.target = target.clone();
+  setTarget(target: Character | THREE.Vector3) {
+    this.target = target;
   }
 
-  protected getTarget(): THREE.Vector3 | null {
+  protected getTarget(): Character | THREE.Vector3 | null {
     return this.target;
   }
 
@@ -37,13 +37,15 @@ export abstract class Monster extends Entity {
   protected moveTowardsTarget(delta: number) {
     if (!this.target || !this.isGrounded) return;
 
-    const direction = this.target.clone().sub(this.mesh.position);
+    const targetPosition = this.target instanceof Character ? this.target.mesh.position : this.target;
+    const direction = targetPosition.clone().sub(this.mesh.position);
     direction.y = 0;
     
     if (direction.length() > 0.5) {
       direction.normalize();
-      this.velocity.x = direction.x * this.moveSpeed * delta;
-      this.velocity.z = direction.z * this.moveSpeed * delta;
+      // Scale moveSpeed by 60 to compensate for delta being 1/60
+      this.velocity.x = direction.x * this.moveSpeed * 60 * delta;
+      this.velocity.z = direction.z * this.moveSpeed * 60 * delta;
 
       // Update monster rotation to face movement direction
       const angle = Math.atan2(direction.x, direction.z);

@@ -285,7 +285,7 @@ export class Game {
     
     // Update monsters
     this.monsters.forEach(monster => {
-        monster.setTarget(this.character.mesh.position);
+        monster.setTarget(this.character);
         monster.update(delta, this.currentLevel.getGroundHeight(monster.mesh.position));
     });
 
@@ -293,7 +293,7 @@ export class Game {
     const currentBiome = this.currentLevel.getBiomeAt(this.character.mesh.position);
     if (currentBiome) {
         if (currentBiome instanceof MountainBiome || currentBiome instanceof SwampBiome) {
-            currentBiome.update(delta, this.character.mesh.position);
+            currentBiome.update(delta, this.character.mesh.position, this.character);
         }
     }
 

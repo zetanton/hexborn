@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Biome } from './Biome';
 import { LilyPad } from '../../entities/LilyPad';
 import { Frog } from '../../entities/Frog';
+import { Character } from '../../entities/Character';
 
 export class SwampBiome extends Biome {
   private heightMap: number[][] = [];
@@ -275,6 +276,16 @@ export class SwampBiome extends Biome {
     const frogCount = 5; // Number of frogs to create
     const minDistance = 20; // Minimum distance between frogs
 
+    // Calculate swamp bounds
+    const swampMin = new THREE.Vector2(
+      this.position.x - this.size.x/2,
+      this.position.y - this.size.y/2
+    );
+    const swampMax = new THREE.Vector2(
+      this.position.x + this.size.x/2,
+      this.position.y + this.size.y/2
+    );
+
     for (let i = 0; i < frogCount; i++) {
       let attempts = 0;
       let position = new THREE.Vector3();
@@ -307,13 +318,14 @@ export class SwampBiome extends Biome {
 
       if (validPosition) {
         const frog = new Frog(position);
+        frog.setSwampBounds(swampMin, swampMax);
         this.frogs.push(frog);
         this.addObject(frog.mesh);
       }
     }
   }
 
-  update(delta: number, playerPosition: THREE.Vector3): void {
+  update(delta: number, playerPosition: THREE.Vector3, player: Character): void {
     // Update fog
     this.updateFog(playerPosition);
 
@@ -324,8 +336,17 @@ export class SwampBiome extends Biome {
 
     // Update frogs
     for (const frog of this.frogs) {
+      // Only update target if frog is not in the middle of an action
+      if (!frog.isPerformingAction()) {
+        // Only set player as target if they're within aggro range
+        const distanceToPlayer = frog.mesh.position.distanceTo(playerPosition);
+        if (distanceToPlayer <= 15) { // Use frog's AGGRO_RANGE
+          frog.setTarget(player);
+        } else if (frog.hasPlayerTarget()) {
+          frog.clearTarget(); // Clear player target if they're too far
+        }
+      }
       frog.update(delta, this.getGroundHeight(frog.mesh.position));
-      frog.setTarget(playerPosition);
     }
   }
 
