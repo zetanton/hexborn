@@ -114,9 +114,13 @@ export class CollisionManager {
     }
 
     private handleSwampCollisions(swampBiome: SwampBiome) {
-        // Handle frog collisions
-        for (const frog of swampBiome.getFrogs()) {
-            const characterPos = this.character.mesh.position;
+        const frogs = swampBiome.getFrogs();
+        const lilyPads = swampBiome.getLilyPads();
+        const characterPos = this.character.mesh.position;
+
+        // Handle frog collisions with character and each other
+        for (const frog of frogs) {
+            // Check frog collision with character
             const dx = characterPos.x - frog.mesh.position.x;
             const dz = characterPos.z - frog.mesh.position.z;
             const quickDist = dx * dx + dz * dz;
@@ -129,23 +133,60 @@ export class CollisionManager {
                     frog.onCollideWithCharacter(this.character);
                 }
             }
+
+            // Check frog collision with other frogs
+            for (const otherFrog of frogs) {
+                if (frog !== otherFrog) {
+                    const frogDx = frog.mesh.position.x - otherFrog.mesh.position.x;
+                    const frogDz = frog.mesh.position.z - otherFrog.mesh.position.z;
+                    const frogDist = frogDx * frogDx + frogDz * frogDz;
+                    const frogMinDist = (frog.collisionRadius + otherFrog.collisionRadius) * 2;
+
+                    if (frogDist < frogMinDist * frogMinDist) {
+                        this.resolveCollision(frog, otherFrog);
+                    }
+                }
+            }
+
+            // Check frog collision with lily pads
+            for (const lilyPad of lilyPads) {
+                const frogToLilyDx = frog.mesh.position.x - lilyPad.mesh.position.x;
+                const frogToLilyDz = frog.mesh.position.z - lilyPad.mesh.position.z;
+                const frogToLilyDist = Math.sqrt(frogToLilyDx * frogToLilyDx + frogToLilyDz * frogToLilyDz);
+
+                // Check if frog is above the lily pad and within its radius
+                if (frogToLilyDist <= lilyPad.collisionRadius && this.isFrog(frog)) {
+                    const lilyPadHeight = lilyPad.mesh.position.y + lilyPad.getFloatOffset();
+                    const heightDiff = frog.mesh.position.y - lilyPadHeight;
+                    
+                    // If frog is above the lily pad and falling or at rest
+                    if (heightDiff > 0 && heightDiff < 5) {
+                        const frogVelocity = frog.getVelocity();
+                        if (frogVelocity.y <= 0.1) {
+                            // Set the lily pad and adjust frog's position
+                            frog.setLilyPad(lilyPad);
+                            // Stop any horizontal movement
+                            frogVelocity.x = 0;
+                            frogVelocity.z = 0;
+                            // Ensure frog is properly positioned on pad
+                            frog.mesh.position.y = lilyPadHeight + 0.5;
+                            break; // Exit loop once we've found a suitable lily pad
+                        }
+                    }
+                }
+            }
         }
 
-        // Handle lily pad collisions
+        // Handle character lily pad collisions
         let foundPad = false;
-        for (const lilyPad of swampBiome.getLilyPads()) {
-            const characterPos = this.character.mesh.position;
-            const lilyPadPos = lilyPad.mesh.position;
-            const characterVelocity = this.character.getVelocity();
-
-            // Check if character is within horizontal bounds of the lily pad
-            const dx = characterPos.x - lilyPadPos.x;
-            const dz = characterPos.z - lilyPadPos.z;
+        for (const lilyPad of lilyPads) {
+            const dx = characterPos.x - lilyPad.mesh.position.x;
+            const dz = characterPos.z - lilyPad.mesh.position.z;
             const horizontalDist = Math.sqrt(dx * dx + dz * dz);
 
             if (horizontalDist <= lilyPad.collisionRadius) {
-                const targetY = lilyPadPos.y + 0.5 + lilyPad.getFloatOffset();
-                // Only adjust if character's vertical velocity is low (falling or nearly stationary)
+                const targetY = lilyPad.mesh.position.y + 0.5 + lilyPad.getFloatOffset();
+                const characterVelocity = this.character.getVelocity();
                 if (characterVelocity.y <= 0.1) {
                     this.character.mesh.position.y = targetY;
                     if (characterVelocity.y < 0) {

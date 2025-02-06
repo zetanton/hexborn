@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Monster } from './Monster';
 import { Character } from './Character';
 import { LilyPad } from './LilyPad';
+import { SwampBiome } from '../levels/biomes/SwampBiome';
 
 enum FrogState {
     RESTING,
@@ -12,19 +13,21 @@ enum FrogState {
 
 export class Frog extends Monster {
     private readonly ATTACK_RANGE = 10;
-    private readonly ATTACK_COOLDOWN = 3;
+    private readonly ATTACK_COOLDOWN = 4;
     private readonly TONGUE_LENGTH = 8;
-    private readonly TONGUE_SPEED = 15;
+    private readonly TONGUE_SPEED = 8;
     private readonly DAMAGE = 15;
-    private readonly HOP_HEIGHT = 4;
+    private readonly HOP_HEIGHT = 15;
     private readonly HOP_COOLDOWN = 1.5;
-    private readonly MAX_HOP_DISTANCE = 8;
-    private readonly MIN_HOP_DISTANCE = 3;
+    private readonly MAX_HOP_DISTANCE = 50;
+    private readonly MIN_HOP_DISTANCE = 10;
     private readonly AGGRO_RANGE = 12; // Reduced aggro range
     private readonly REST_TIME_MIN = 4; // Minimum rest time
     private readonly REST_TIME_MAX = 8; // Maximum rest time
-    private readonly WALK_TIME_MIN = 2; // Minimum walk time
-    private readonly WALK_TIME_MAX = 4; // Maximum walk time
+    private readonly WALK_TIME_MIN = 5; // Minimum walk time
+    private readonly WALK_TIME_MAX = 15; // Maximum walk time
+    private readonly LILY_PAD_REST_TIME = 20; // Time to rest on lily pad in seconds
+    private readonly LILY_PAD_CHECK_RADIUS = 3; // Reduced from 25 to 3 for more precise detection
     
     private swampBounds: { min: THREE.Vector2, max: THREE.Vector2 } | null = null;
     private tongue: THREE.Group;
@@ -42,8 +45,10 @@ export class Frog extends Monster {
     private stateTimer: number = 0;
     private walkDirection: THREE.Vector3 = new THREE.Vector3();
     private currentLilyPad: LilyPad | null = null;
+    private lilyPadRestTimer: number = 0;
+    private swampBiome: SwampBiome | null = null;
 
-    constructor(position: THREE.Vector3) {
+    constructor(position: THREE.Vector3, swampBiome: SwampBiome) {
         super(position);
         this.collisionRadius = 2;
         this.bodyGroup = new THREE.Group();
@@ -52,6 +57,7 @@ export class Frog extends Monster {
         this.tongue = this.createTongue();
         this.setMoveSpeed(2); // Slower base movement speed
         this.initializeState();
+        this.swampBiome = swampBiome;
     }
 
     private initializeState() {
@@ -103,17 +109,29 @@ export class Frog extends Monster {
     }
 
     public setLilyPad(lilyPad: LilyPad): void {
-        this.currentLilyPad = lilyPad;
-        // Position the frog on the lily pad
-        const lilyPadPos = lilyPad.mesh.position;
-        this.mesh.position.copy(lilyPadPos);
-        this.mesh.position.y += 0.5; // Position slightly above lily pad
-        
-        // Random position within the lily pad's radius
-        const angle = Math.random() * Math.PI * 2;
-        const radius = Math.random() * (lilyPad.collisionRadius * 0.5); // Stay within inner half of lily pad
-        this.mesh.position.x += Math.cos(angle) * radius;
-        this.mesh.position.z += Math.sin(angle) * radius;
+        if (this.currentLilyPad !== lilyPad) {
+            this.currentLilyPad = lilyPad;
+            this.lilyPadRestTimer = this.LILY_PAD_REST_TIME;
+            
+            // Position the frog on the lily pad
+            const lilyPadPos = lilyPad.mesh.position;
+            this.mesh.position.copy(lilyPadPos);
+            this.mesh.position.y = lilyPadPos.y + lilyPad.getFloatOffset() + 0.5;
+            
+            // Random position within the inner part of lily pad
+            const angle = Math.random() * Math.PI * 2;
+            const radius = Math.random() * (lilyPad.collisionRadius * 0.4); // Stay within inner 40% of lily pad
+            this.mesh.position.x += Math.cos(angle) * radius;
+            this.mesh.position.z += Math.sin(angle) * radius;
+
+            // Force resting state when on lily pad
+            this.currentState = FrogState.RESTING;
+            this.stateTimer = this.LILY_PAD_REST_TIME;
+            
+            // Clear any velocity
+            const velocity = this.getVelocity();
+            velocity.set(0, 0, 0);
+        }
     }
 
     protected createMonsterMesh(): void {
@@ -139,13 +157,19 @@ export class Frog extends Monster {
             roughness: 0.3,
             metalness: 0.7
         });
-
+        
+        // Left eye
         const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
         leftEye.position.set(-0.8, 0.8, 1);
+        leftEye.userData.isEye = true;
+        leftEye.userData.defaultPosition = leftEye.position.clone();
         this.bodyGroup.add(leftEye);
-
+        
+        // Right eye
         const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
         rightEye.position.set(0.8, 0.8, 1);
+        rightEye.userData.isEye = true;
+        rightEye.userData.defaultPosition = rightEye.position.clone();
         this.bodyGroup.add(rightEye);
 
         // Create pupils
@@ -162,6 +186,15 @@ export class Frog extends Monster {
         const rightPupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
         rightPupil.position.set(0, 0, 0.3);
         rightEye.add(rightPupil);
+
+        // Create straight line for mouth
+        const mouthGeometry = new THREE.BoxGeometry(0.8, 0.08, 0.08);
+        const mouthMaterial = new THREE.MeshBasicMaterial({
+            color: 0x000000
+        });
+        const mouth = new THREE.Mesh(mouthGeometry, mouthMaterial);
+        mouth.position.set(0, 0.5, 1.8); // Higher position (y=0.5)
+        this.bodyGroup.add(mouth);
 
         // Add legs
         const legGeometry = new THREE.CylinderGeometry(0.3, 0.2, 1.5, 8);
@@ -197,8 +230,9 @@ export class Frog extends Monster {
     private createTongue() {
         const tongueGroup = new THREE.Group();
         
-        // Main tongue body (thinner cylinder)
-        const tongueGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1, 8); // Thinner tongue
+        // Main tongue body (thinner cylinder) with base at origin
+        const tongueGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1, 8);
+        tongueGeometry.translate(0, 0.5, 0); // Shift so base is at y=0
         const tongueMaterial = new THREE.MeshStandardMaterial({
             color: 0xff69b4,
             roughness: 0.6,
@@ -207,21 +241,23 @@ export class Frog extends Monster {
         const tongueBody = new THREE.Mesh(tongueGeometry, tongueMaterial);
         tongueGroup.add(tongueBody);
         
-        // Sticky tongue tip (larger sphere)
-        const tipGeometry = new THREE.SphereGeometry(0.5, 12, 12); // Bigger sticky end
+        // Sticky tongue tip (larger sphere) positioned at the end of the tongue
+        const tipGeometry = new THREE.SphereGeometry(0.5, 12, 12);
         const tipMaterial = new THREE.MeshStandardMaterial({
             color: 0xff1493,
             roughness: 0.3,
             metalness: 0.2,
             emissive: 0xff1493,
-            emissiveIntensity: 0.2 // Slight glow effect
+            emissiveIntensity: 0.2
         });
         const tip = new THREE.Mesh(tipGeometry, tipMaterial);
-        tip.position.y = 0.5;
+        tip.position.y = 1; // Position tip at the end of the base tongue length
         tongueGroup.add(tip);
         
-        tongueGroup.rotation.x = Math.PI / 2;
-        tongueGroup.visible = false;
+        tongueGroup.rotation.x = Math.PI / 2; // Straight forward
+        tongueGroup.position.set(0, 0.5, 1.8); // Match the mouth position
+        tongueGroup.scale.set(0.01, 0.01, 0.01); // Start tiny when not in use
+        tongueGroup.visible = true; // Can stay visible since it's tiny
         this.bodyGroup.add(tongueGroup);
         
         return tongueGroup;
@@ -230,11 +266,22 @@ export class Frog extends Monster {
     update(delta: number, groundHeight: number): void {
         super.update(delta, groundHeight);
 
-        // Update position based on lily pad if we're on one
+        // Update lily pad rest timer and position
         if (this.currentLilyPad) {
+            this.lilyPadRestTimer -= delta;
+            
+            // Update position based on lily pad if we're on one
             const lilyPadPos = this.currentLilyPad.mesh.position;
             const floatOffset = this.currentLilyPad.getFloatOffset();
-            this.mesh.position.y = lilyPadPos.y + floatOffset + 0.5; // Position slightly above lily pad and sync with its movement
+            this.mesh.position.y = lilyPadPos.y + floatOffset + 0.5;
+
+            // Leave lily pad when timer expires
+            if (this.lilyPadRestTimer <= 0) {
+                this.currentLilyPad = null;
+                this.currentState = FrogState.HOPPING;
+                this.startRandomHop();
+            }
+            return; // Skip other updates while on lily pad
         }
 
         // Update cooldowns
@@ -253,6 +300,19 @@ export class Frog extends Monster {
 
         // Update state timer
         this.stateTimer -= delta;
+
+        // Check for nearby lily pads when not attacking or hopping
+        if (!this.isAttacking && !this.isHopping && !this.currentLilyPad) {
+            // Get all lily pads in the scene (you'll need to implement this)
+            const nearbyLilyPads = this.getNearbyLilyPads();
+            for (const lilyPad of nearbyLilyPads) {
+                const distance = this.mesh.position.distanceTo(lilyPad.mesh.position);
+                if (distance < this.LILY_PAD_CHECK_RADIUS) {
+                    this.setLilyPad(lilyPad);
+                    break;
+                }
+            }
+        }
 
         // Handle player targeting separately and with lower priority
         if (this.target instanceof Character) {
@@ -278,7 +338,7 @@ export class Frog extends Monster {
                         this.startRandomHop();
                     }
                 }
-                this.updateIdleAnimation(delta);
+                this.updateIdleAnimation();
                 break;
 
             case FrogState.WALKING:
@@ -312,25 +372,21 @@ export class Frog extends Monster {
                 }
                 break;
         }
-
-        // Clear current lily pad when hopping
-        if (this.isHopping) {
-            this.currentLilyPad = null;
-        }
     }
 
-    private updateIdleAnimation(delta: number) {
+    private updateIdleAnimation() {
         // Gentle breathing animation
         const breatheSpeed = 2;
         const breatheAmount = 0.05;
         this.bodyGroup.scale.y = 1 + Math.sin(Date.now() * 0.001 * breatheSpeed) * breatheAmount;
         
-        // Subtle eye movement
+        // Subtle eye movement using default positions
         const eyeSpeed = 1;
         const eyeAmount = 0.1;
         this.bodyGroup.children.forEach(child => {
-            if (child.position.y > 0) { // Only affect eyes
-                child.position.y = child.position.y + Math.sin(Date.now() * 0.001 * eyeSpeed) * eyeAmount * delta;
+            if (child.userData && child.userData.isEye) {
+                const defaultY = child.userData.defaultPosition ? child.userData.defaultPosition.y : child.position.y;
+                child.position.y = defaultY + Math.sin(Date.now() * 0.001 * eyeSpeed) * eyeAmount;
             }
         });
     }
@@ -338,18 +394,32 @@ export class Frog extends Monster {
     private startRandomHop() {
         if (!this.swampBounds) return;
 
-        // Generate a shorter hop distance for natural movement
-        const randomAngle = Math.random() * Math.PI * 2;
-        const randomDistance = this.MIN_HOP_DISTANCE + Math.random() * 3; // Shorter hops for ambient movement
-        
-        const targetX = this.mesh.position.x + Math.cos(randomAngle) * randomDistance;
-        const targetZ = this.mesh.position.z + Math.sin(randomAngle) * randomDistance;
+        // Keep generating new hop targets until we get one that's significantly different from current position
+        let attempts = 0;
+        let targetX, targetZ;
+        do {
+            const randomAngle = Math.random() * Math.PI * 2;
+            const randomDistance = this.MIN_HOP_DISTANCE + Math.random() * (this.MAX_HOP_DISTANCE - this.MIN_HOP_DISTANCE);
+            
+            targetX = this.mesh.position.x + Math.cos(randomAngle) * randomDistance;
+            targetZ = this.mesh.position.z + Math.sin(randomAngle) * randomDistance;
 
-        // Clamp to swamp bounds with padding
-        const clampedX = Math.max(this.swampBounds.min.x + 2, Math.min(this.swampBounds.max.x - 2, targetX));
-        const clampedZ = Math.max(this.swampBounds.min.y + 2, Math.min(this.swampBounds.max.y - 2, targetZ));
+            // Clamp to swamp bounds with padding
+            targetX = Math.max(this.swampBounds.min.x + 2, Math.min(this.swampBounds.max.x - 2, targetX));
+            targetZ = Math.max(this.swampBounds.min.y + 2, Math.min(this.swampBounds.max.y - 2, targetZ));
 
-        const hopTarget = new THREE.Vector3(clampedX, this.mesh.position.y, clampedZ);
+            // Check if the new position is significantly different (at least MIN_HOP_DISTANCE away)
+            const diffX = targetX - this.mesh.position.x;
+            const diffZ = targetZ - this.mesh.position.z;
+            const distance = Math.sqrt(diffX * diffX + diffZ * diffZ);
+
+            if (distance >= this.MIN_HOP_DISTANCE || attempts > 5) {
+                break;
+            }
+            attempts++;
+        } while (true);
+
+        const hopTarget = new THREE.Vector3(targetX, this.mesh.position.y, targetZ);
         this.setTarget(hopTarget);
         this.startHop();
     }
@@ -388,7 +458,8 @@ export class Frog extends Monster {
     }
 
     private updateHopAnimation(delta: number) {
-        this.hopProgress += delta * 2.5; // Slightly slower hop speed for more hang time
+        // Much slower hop speed for significantly more hang time
+        this.hopProgress += delta * 0.8; // Drastically reduced for much slower movement
 
         if (this.hopProgress >= 1) {
             this.isHopping = false;
@@ -396,21 +467,36 @@ export class Frog extends Monster {
             return;
         }
 
-        // Enhanced parabolic hop motion with more height
+        // Custom animation curve for proper hop arc with long hang time
         const t = this.hopProgress;
-        const height = Math.sin(t * Math.PI) * this.HOP_HEIGHT;
         
-        // Add slight horizontal curve to make hops more interesting
-        const curveOffset = Math.sin(t * Math.PI * 2) * 0.5;
-        const newPosition = new THREE.Vector3().lerpVectors(this.hopStartPosition, this.hopTargetPosition, t);
+        // Horizontal movement: Ease out at start, ease in at end
+        const horizontalT = this.easeInOutQuad(t);
+        const newPosition = new THREE.Vector3().lerpVectors(
+            this.hopStartPosition, 
+            this.hopTargetPosition, 
+            horizontalT
+        );
+
+        // Vertical movement: Modified curve for longer hang time at apex
+        let heightT = t * Math.PI;
+        // Slow down the middle portion for longer hang time
+        if (t > 0.3 && t < 0.7) {
+            heightT = Math.PI * (0.3 + (t - 0.3) * 0.5);
+        }
+        const height = Math.sin(heightT) * this.HOP_HEIGHT;
         newPosition.y = this.hopStartPosition.y + height;
-        
-        // Add slight sideways motion during hop
-        const hopDirection = new THREE.Vector3().subVectors(this.hopTargetPosition, this.hopStartPosition).normalize();
-        const sideDirection = new THREE.Vector3(-hopDirection.z, 0, hopDirection.x);
-        newPosition.add(sideDirection.multiplyScalar(curveOffset));
-        
+
+        // Keep the body level throughout the hop - no rotations
+        this.bodyGroup.rotation.x = 0;
+
+        // Update position
         this.mesh.position.copy(newPosition);
+    }
+
+    // Helper function for smooth acceleration/deceleration
+    private easeInOutQuad(t: number): number {
+        return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
     }
 
     private updateTongueAttack(delta: number) {
@@ -437,7 +523,7 @@ export class Frog extends Monster {
             
             if (this.tongueExtension <= 0) {
                 this.isAttacking = false;
-                this.tongue.visible = false;
+                this.tongue.scale.set(0.01, 0.01, 0.01); // Return to tiny size when done
                 this.targetPoint = null;
                 this.bodyGroup.scale.set(1, 1, 1);
                 this.tongue.userData.retracting = false;
@@ -466,15 +552,21 @@ export class Frog extends Monster {
         this.isAttacking = true;
         this.attackCooldown = this.ATTACK_COOLDOWN;
         this.tongueExtension = 0;
-        this.tongue.visible = true;
-        this.tongue.scale.y = 1;
+        this.tongue.scale.set(1, 1, 1); // Reset to full size for attack
         this.targetPoint = this.target.mesh.position.clone();
         this.tongue.userData.retracting = false;
 
-        // Orient tongue towards target
+        // Orient tongue directly towards target
         if (this.targetPoint) {
-            const targetDirection = new THREE.Vector3().subVectors(this.targetPoint, this.mesh.position);
-            this.tongue.rotation.x = Math.PI / 2;
+            let targetDirection = new THREE.Vector3().subVectors(this.targetPoint, this.mesh.position).normalize();
+            const frogForward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.mesh.quaternion);
+            
+            if (frogForward.dot(targetDirection) < 0) {
+                // If target is behind, force tongue to extend forward
+                targetDirection = frogForward;
+            }
+            
+            this.tongue.rotation.x = Math.PI / 2; // Straight forward
             this.tongue.rotation.y = Math.atan2(targetDirection.x, targetDirection.z);
         }
 
@@ -498,5 +590,18 @@ export class Frog extends Monster {
     public clearTarget(): void {
         this.target = null;
         this.stateTimer = this.getRandomTimeForState(FrogState.RESTING);
+    }
+
+    private getNearbyLilyPads(): LilyPad[] {
+        if (!this.swampBiome) return [];
+        
+        // Get all lily pads from the swamp
+        const allLilyPads = this.swampBiome.getLilyPads();
+        
+        // Filter to only include lily pads within check radius
+        return allLilyPads.filter((lilyPad: LilyPad) => {
+            const distance = this.mesh.position.distanceTo(lilyPad.mesh.position);
+            return distance < this.LILY_PAD_CHECK_RADIUS;
+        });
     }
 } 
