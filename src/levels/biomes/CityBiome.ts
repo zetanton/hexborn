@@ -2,10 +2,13 @@ import * as THREE from 'three';
 import { Biome } from './Biome';
 import { Building } from '../../entities/Building';
 import { StreetLamp } from '../../entities/StreetLamp';
+import { RedLurker } from '../../entities/RedLurker';
 
 export class CityBiome extends Biome {
   private buildings: Building[] = [];
   private streetLamps: StreetLamp[] = [];
+  private redLurkers: RedLurker[] = [];
+  private readonly LURKER_COUNT = 3;
 
   protected generateTerrain(): void {
     this.createGround();
@@ -13,6 +16,7 @@ export class CityBiome extends Biome {
     this.createBuildings();
     this.createStreetLamps();
     this.setupLighting();
+    this.spawnRedLurkers();
   }
 
   private createGround() {
@@ -267,6 +271,72 @@ export class CityBiome extends Biome {
       this.streetLamps.push(lamp);
       this.addObject(lamp.mesh);
     });
+  }
+
+  private spawnRedLurkers() {
+    const bounds = this.getBiomeBounds();
+    const blockSize = 80;
+    const spawnPoints: THREE.Vector3[] = [];
+    
+    // Calculate all possible spawn points at road intersections
+    for (let x = bounds.min.x + blockSize; x < bounds.max.x; x += blockSize) {
+      for (let z = bounds.min.y + blockSize; z < bounds.max.y; z += blockSize) {
+        spawnPoints.push(new THREE.Vector3(x, 0.75, z));
+      }
+    }
+
+    // Shuffle spawn points
+    for (let i = spawnPoints.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [spawnPoints[i], spawnPoints[j]] = [spawnPoints[j], spawnPoints[i]];
+    }
+
+    // Take the first LURKER_COUNT points, ensuring they're spread out
+    const selectedPoints: THREE.Vector3[] = [];
+    const minDistance = blockSize; // Minimum distance between spawn points
+
+    for (const point of spawnPoints) {
+      if (selectedPoints.length >= this.LURKER_COUNT) break;
+
+      // Check if this point is far enough from all selected points
+      const isFarEnough = selectedPoints.every(selected => 
+        point.distanceTo(selected) >= minDistance
+      );
+
+      if (isFarEnough) {
+        selectedPoints.push(point);
+      }
+    }
+
+    // Spawn lurkers at selected points
+    selectedPoints.forEach(point => {
+      const lurker = new RedLurker(point);
+      lurker.setCityBounds(bounds.min, bounds.max);
+      this.redLurkers.push(lurker);
+      this.addObject(lurker.mesh);
+    });
+
+    // Set other lurkers for each RedLurker
+    this.redLurkers.forEach(lurker => {
+      lurker.setOtherLurkers(this.redLurkers);
+    });
+  }
+
+  public getBiomeBounds(): { min: THREE.Vector2, max: THREE.Vector2 } {
+    return {
+      min: new THREE.Vector2(
+        this.position.x - this.size.x/2,
+        this.position.y - this.size.y/2
+      ),
+      max: new THREE.Vector2(
+        this.position.x + this.size.x/2,
+        this.position.y + this.size.y/2
+      )
+    };
+  }
+
+  public getRedLurkers(): RedLurker[] {
+    return this.redLurkers;
   }
 
   public getBuildings(): Building[] {

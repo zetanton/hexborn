@@ -8,6 +8,7 @@ import { CollisionManager } from '../physics/CollisionManager';
 import { SoundManager } from '../audio/SoundManager';
 import { MountainBiome } from '../levels/biomes/MountainBiome';
 import { SwampBiome } from '../levels/biomes/SwampBiome';
+import { CityBiome } from '../levels/biomes/CityBiome';
 
 export class Game {
   private scene: THREE.Scene;
@@ -70,9 +71,8 @@ export class Game {
     // Initialize character controller
     this.characterController = new CharacterController(this.character);
 
-    // Initialize monsters (after character)
+    // Initialize monsters array (will be populated by biomes)
     this.monsters = [];
-    this.spawnMonsters(5);
 
     // Initialize collision manager with both character and monsters
     this.collisionManager = new CollisionManager(this.character, this.monsters);
@@ -149,47 +149,6 @@ export class Game {
         this.characterController.updateCameraRotation(this.cameraRotation);
       }
     });
-  }
-
-  private spawnMonsters(count: number) {
-    const safeRadius = 15; // Minimum distance from player
-    const maxRadius = 20; // Maximum spawn distance
-
-    for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2; // Evenly distribute around circle
-      const distance = safeRadius + Math.random() * (maxRadius - safeRadius);
-      const position = new THREE.Vector3(
-        Math.cos(angle) * distance,
-        0.75, // Set to same height as character
-        Math.sin(angle) * distance
-      );
-      const monster = new RedLurker(position);
-      this.monsters.push(monster);
-      this.scene.add(monster.mesh);
-    }
-  }
-
-  private updateCamera() {
-    // Calculate camera position based on character position and rotation
-    const targetPosition = this.character.mesh.position.clone();
-    
-    // Calculate camera offset with vertical angle
-    const horizontalDistance = Math.cos(this.cameraVerticalAngle) * this.CAMERA_DISTANCE;
-    const verticalOffset = Math.sin(this.cameraVerticalAngle) * this.CAMERA_DISTANCE;
-    
-    const cameraOffset = new THREE.Vector3(
-      Math.sin(this.cameraRotation) * horizontalDistance,
-      this.CAMERA_HEIGHT + verticalOffset,
-      Math.cos(this.cameraRotation) * horizontalDistance
-    );
-    
-    // Smoothly interpolate camera position
-    this.camera.position.lerp(targetPosition.add(cameraOffset), 0.1);
-    
-    // Look at character's head level
-    const lookTarget = this.character.mesh.position.clone();
-    lookTarget.y += 0.75;
-    this.camera.lookAt(lookTarget);
   }
 
   private setupDebugControls(): void {
@@ -282,30 +241,70 @@ export class Game {
         // If no collision, allow the update
         this.character.update(delta, this.currentLevel.getGroundHeight(nextPosition));
     }
-    
-    // Update monsters
-    this.monsters.forEach(monster => {
-        monster.setTarget(this.character);
-        monster.update(delta, this.currentLevel.getGroundHeight(monster.mesh.position));
-    });
 
-    // Update biome-specific entities (like trolls)
+    // Update biome-specific entities and collect monsters
+    this.monsters = [];
     const currentBiome = this.currentLevel.getBiomeAt(this.character.mesh.position);
     if (currentBiome) {
-        if (currentBiome instanceof MountainBiome || currentBiome instanceof SwampBiome) {
+        if (currentBiome instanceof MountainBiome) {
+            const trolls = currentBiome.getTrolls();
+            this.monsters.push(...trolls);
+            currentBiome.update(delta, this.character.mesh.position);
+        } else if (currentBiome instanceof SwampBiome) {
+            const frogs = currentBiome.getFrogs();
+            this.monsters.push(...frogs);
             currentBiome.update(delta, this.character.mesh.position, this.character);
+        } else if (currentBiome instanceof CityBiome) {
+            const lurkers: RedLurker[] = currentBiome.getRedLurkers();
+            this.monsters.push(...lurkers);
+            // Update RedLurkers
+            lurkers.forEach(lurker => {
+                if (!lurker.isTargetingCharacter(this.character)) {
+                    const distanceToPlayer = lurker.mesh.position.distanceTo(this.character.mesh.position);
+                    if (distanceToPlayer <= lurker.AGGRO_RANGE) {
+                        lurker.setTarget(this.character);
+                    }
+                }
+                lurker.update(delta, this.currentLevel.getGroundHeight(lurker.mesh.position));
+            });
         }
     }
+
+    // Update collision manager with current monsters
+    this.collisionManager = new CollisionManager(this.character, this.monsters);
+    
+    // Handle entity collisions using collision manager
+    this.collisionManager.handleCollisions(currentBiome);
 
     // Update environment effects (fog, etc.)
     this.currentLevel.updateEnvironment(this.character.mesh.position);
 
     this.updateCamera();
     
-    // Handle entity collisions using collision manager
-    this.collisionManager.handleCollisions(currentBiome);
-
     // Render scene
     this.renderer.render(this.scene, this.camera);
   };
+
+  private updateCamera() {
+    // Calculate camera position based on character position and rotation
+    const targetPosition = this.character.mesh.position.clone();
+    
+    // Calculate camera offset with vertical angle
+    const horizontalDistance = Math.cos(this.cameraVerticalAngle) * this.CAMERA_DISTANCE;
+    const verticalOffset = Math.sin(this.cameraVerticalAngle) * this.CAMERA_DISTANCE;
+    
+    const cameraOffset = new THREE.Vector3(
+      Math.sin(this.cameraRotation) * horizontalDistance,
+      this.CAMERA_HEIGHT + verticalOffset,
+      Math.cos(this.cameraRotation) * horizontalDistance
+    );
+    
+    // Smoothly interpolate camera position
+    this.camera.position.lerp(targetPosition.add(cameraOffset), 0.1);
+    
+    // Look at character's head level
+    const lookTarget = this.character.mesh.position.clone();
+    lookTarget.y += 0.75;
+    this.camera.lookAt(lookTarget);
+  }
 }
