@@ -10,15 +10,54 @@ export class Troll extends Monster {
     private attackPhase: number = 0;
     private readonly ATTACK_DAMAGE = 20;
     private readonly ATTACK_RANGE = 3;
+    private mountainBounds: { min: THREE.Vector2, max: THREE.Vector2 } | null = null;
+    private protectionPoint: THREE.Vector3 | null = null;
+    private readonly PROTECTION_RADIUS = 20;
+    private readonly CHASE_SPEED = 3;
+    private readonly PATROL_SPEED = 1;
 
     constructor(position: THREE.Vector3) {
         super(position);
-        this.createTrollMesh();
-        this.setMoveSpeed(2); // Slower but more menacing
+        this.createMonsterMesh();
+        this.setMoveSpeed(this.PATROL_SPEED);
         this.collisionRadius = 1.5; // Larger collision radius
+        this.protectionPoint = position.clone(); // Initially protect spawn point
     }
 
-    private createTrollMesh() {
+    public setMountainBounds(min: THREE.Vector2, max: THREE.Vector2) {
+        this.mountainBounds = { min, max };
+    }
+
+    public setProtectionPoint(point: THREE.Vector3) {
+        this.protectionPoint = point.clone();
+    }
+
+    public getProtectionPoint(): THREE.Vector3 | null {
+        return this.protectionPoint;
+    }
+
+    private isWithinMountainBounds(position: THREE.Vector3): boolean {
+        if (!this.mountainBounds) return true;
+        return position.x >= this.mountainBounds.min.x &&
+               position.x <= this.mountainBounds.max.x &&
+               position.z >= this.mountainBounds.min.y &&
+               position.z <= this.mountainBounds.max.y;
+    }
+
+    private isTargetClimbingMountain(targetPosition: THREE.Vector3): boolean {
+        if (!this.protectionPoint) return false;
+        const distanceToProtectionPoint = targetPosition.distanceTo(this.protectionPoint);
+        return distanceToProtectionPoint < this.PROTECTION_RADIUS;
+    }
+
+    private getTargetPosition(target: THREE.Vector3 | Character): THREE.Vector3 {
+        if (target instanceof Character) {
+            return target.mesh.position.clone();
+        }
+        return target.clone();
+    }
+
+    protected createMonsterMesh(): THREE.Group {
         // Clear existing monster mesh
         while(this.mesh.children.length > 0) {
             this.mesh.remove(this.mesh.children[0]);
@@ -363,27 +402,58 @@ export class Troll extends Monster {
         this.mesh.userData.rightArm = rightArmGroup;
         this.mesh.userData.leftArm = leftArmGroup;
         this.mesh.userData.head = headGroup;
+
+        return bodyGroup;
     }
 
     update(delta: number, groundHeight: number) {
         super.update(delta, groundHeight);
         
-        // Update attack cooldown
         if (this.attackCooldown > 0) {
             this.attackCooldown -= delta;
         }
 
-        // Update attack animation
         if (this.isAttacking) {
             this.updateAttackAnimation(delta);
+            return; // Don't move while attacking
         }
 
-        // Check if we should attack
-        if (this.getTarget() && !this.isAttacking && this.attackCooldown <= 0) {
-            const distanceToTarget = this.mesh.position.distanceTo(this.getTarget()!);
-            if (distanceToTarget < this.ATTACK_RANGE) {
-                this.startAttack();
+        const target = this.getTarget();
+        if (!target) {
+            // No target, patrol around protection point if we have one
+            if (this.protectionPoint) {
+                const distanceToProtectionPoint = this.mesh.position.distanceTo(this.protectionPoint);
+                if (distanceToProtectionPoint > this.PROTECTION_RADIUS * 0.8) {
+                    // Move back towards protection point
+                    this.setTarget(this.protectionPoint.clone());
+                    this.setMoveSpeed(this.PATROL_SPEED);
+                }
             }
+            return;
+        }
+
+        const targetPosition = this.getTargetPosition(target);
+        if (this.isTargetClimbingMountain(targetPosition)) {
+            this.setMoveSpeed(this.CHASE_SPEED);
+
+            // Check if we should attack
+            if (!this.isAttacking && this.attackCooldown <= 0) {
+                const distanceToTarget = this.mesh.position.distanceTo(targetPosition);
+                if (distanceToTarget < this.ATTACK_RANGE) {
+                    this.startAttack();
+                    return; // Start attack immediately
+                }
+            }
+        } else {
+            // Return to normal patrol speed
+            this.setMoveSpeed(this.PATROL_SPEED);
+        }
+
+        // Ensure we stay within mountain bounds
+        const nextPosition = this.mesh.position.clone().add(this.velocity.clone().multiplyScalar(delta));
+        if (!this.isWithinMountainBounds(nextPosition)) {
+            // If would move out of bounds, zero out velocity
+            this.velocity.setX(0).setZ(0);
         }
     }
 
@@ -391,9 +461,6 @@ export class Troll extends Monster {
         this.isAttacking = true;
         this.attackPhase = 0;
         this.attackCooldown = this.ATTACK_COOLDOWN_TIME;
-        
-        // Store original position for recovery
-        this.mesh.userData.attackStartPosition = this.mesh.position.clone();
     }
 
     private updateAttackAnimation(delta: number) {
@@ -430,12 +497,9 @@ export class Troll extends Monster {
             // Body follows through with the swing
             this.mesh.rotation.y -= delta * 2;
             
-            // Check for hit at the most powerful point of the swing
-            if (progress >= 0.5 && progress <= 0.7 && this.getTarget()) {
-                const distanceToTarget = this.mesh.position.distanceTo(this.getTarget()!);
-                if (distanceToTarget < this.ATTACK_RANGE) {
-                    this.onAttackHit();
-                }
+            // Check for hit at the most powerful point of the swing (around middle of swing)
+            if (progress >= 0.4 && progress <= 0.6) {
+                this.checkAttackHit();
             }
             
         } else if (this.attackPhase < 1.5) {
@@ -455,26 +519,16 @@ export class Troll extends Monster {
             this.club.rotation.z = Math.PI * 0.7;
             rightArm.rotation.set(-Math.PI * 0.2, 0, -Math.PI * 0.1);
             this.isAttacking = false;
+            // Don't reset attackPhase here, let it be reset when starting a new attack
         }
     }
 
-    private onAttackHit() {
-        // Get the target (which should be the character)
+    private checkAttackHit() {
         const target = this.getTarget();
-        if (target) {
-            // Find the character in the scene
-            const scene = this.mesh.parent;
-            if (scene) {
-                // Look for the character in the scene
-                const characterMesh = scene.children.find(
-                    child => child.userData.entity instanceof Character
-                );
-                
-                if (characterMesh && characterMesh.userData.entity instanceof Character) {
-                    const character = characterMesh.userData.entity;
-                    // Apply damage using our ATTACK_DAMAGE constant
-                    character.takeDamage(this.ATTACK_DAMAGE, this);
-                }
+        if (target instanceof Character) {
+            const distanceToTarget = this.mesh.position.distanceTo(target.mesh.position);
+            if (distanceToTarget < this.ATTACK_RANGE) {
+                target.takeDamage(this.ATTACK_DAMAGE, this);
             }
         }
     }
@@ -482,5 +536,9 @@ export class Troll extends Monster {
     public onCollideWithCharacter(character: Character) {
         super.onCollideWithCharacter(character);
         // Add additional collision effects if needed
+    }
+
+    public getDamage(): number {
+        return this.ATTACK_DAMAGE;
     }
 } 

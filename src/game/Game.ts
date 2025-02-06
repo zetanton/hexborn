@@ -164,8 +164,18 @@ export class Game {
     this.debugUIPanel.style.color = 'white';
     this.debugUIPanel.style.fontFamily = 'monospace';
     this.debugUIPanel.style.display = 'none';
-    this.debugUIPanel.innerHTML = '<strong>Debug Teleport Panel</strong><br>Press number keys (1-9) to teleport to a biome.';
     document.body.appendChild(this.debugUIPanel);
+
+    // Create health display element
+    const healthDisplay = document.createElement('div');
+    healthDisplay.id = 'debug-health-display';
+    healthDisplay.style.marginBottom = '10px';
+    this.debugUIPanel.appendChild(healthDisplay);
+
+    // Add teleport instructions
+    const teleportInstructions = document.createElement('div');
+    teleportInstructions.innerHTML = '<strong>Debug Teleport Panel</strong><br>Press number keys (1-9) to teleport to a biome.';
+    this.debugUIPanel.appendChild(teleportInstructions);
 
     document.addEventListener('keydown', (e: KeyboardEvent) => {
       const key = e.key;
@@ -211,6 +221,25 @@ export class Game {
     requestAnimationFrame(this.animate);
 
     const delta = 1/60;
+
+    // Update debug panel if visible
+    if (this.debugUIVisible && this.debugUIPanel) {
+      const healthDisplay = this.debugUIPanel.querySelector('#debug-health-display') as HTMLDivElement;
+      if (healthDisplay) {
+        const health = this.character.getHealth();
+        const maxHealth = this.character.getMaxHealth();
+        healthDisplay.innerHTML = `Health: ${health}/${maxHealth}`;
+        // Color the text based on health percentage
+        const healthPercentage = health / maxHealth;
+        if (healthPercentage > 0.6) {
+          healthDisplay.style.color = '#00ff00'; // Green
+        } else if (healthPercentage > 0.3) {
+          healthDisplay.style.color = '#ffff00'; // Yellow
+        } else {
+          healthDisplay.style.color = '#ff0000'; // Red
+        }
+      }
+    }
 
     // Store current position before updates
     const previousPosition = this.character.mesh.position.clone();

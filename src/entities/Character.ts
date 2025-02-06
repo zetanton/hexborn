@@ -44,9 +44,10 @@ export class Character extends Entity {
 
   private isInvulnerable: boolean = false;
   private invulnerabilityTimer: number = 0;
-  private readonly INVULNERABILITY_DURATION: number = 1000; // 1 second
+  private readonly INVULNERABILITY_DURATION: number = 1.0; // Changed to 1.0 seconds
 
   // Add health property
+  private readonly MAX_HEALTH = 100;
   private health: number = 100;
 
   constructor() {
@@ -55,6 +56,7 @@ export class Character extends Entity {
     this.initializeClothSimulation();
     // Start at origin to see initial biomes
     this.mesh.position.set(0, 0.75, 0);
+    this.collisionRadius = 0.5;
   }
 
   private createWizard() {
@@ -715,6 +717,14 @@ export class Character extends Entity {
     // Update animation time
     this.animationTime += delta;
 
+    // Update invulnerability
+    if (this.isInvulnerable) {
+      this.invulnerabilityTimer -= delta;
+      if (this.invulnerabilityTimer <= 0) {
+        this.isInvulnerable = false;
+      }
+    }
+
     // Update cloth physics
     this.updateClothPhysics(delta);
 
@@ -758,14 +768,6 @@ export class Character extends Entity {
       this.applyCastingAnimation();
     } else {
       this.applyIdleAnimation();
-    }
-
-    // Update invulnerability
-    if (this.isInvulnerable) {
-      this.invulnerabilityTimer -= delta;
-      if (this.invulnerabilityTimer <= 0) {
-        this.isInvulnerable = false;
-      }
     }
   }
 
@@ -914,7 +916,7 @@ export class Character extends Entity {
 
   public takeDamage(amount: number, attacker: Monster) {
     if (!this.isInvulnerable) {
-      this.health -= amount;
+      this.health = Math.max(0, this.health - amount);
       this.isInvulnerable = true;
       this.invulnerabilityTimer = this.INVULNERABILITY_DURATION;
       
@@ -932,5 +934,15 @@ export class Character extends Entity {
         this.velocity.z = (dz / distance) * knockbackForce;
       }
     }
+    // TODO: Add damage feedback (visual/audio)
+    console.log(`Character took ${amount} damage from ${attacker.constructor.name}. Health: ${this.health}/${this.MAX_HEALTH}`);
+  }
+
+  public getHealth(): number {
+    return this.health;
+  }
+
+  public getMaxHealth(): number {
+    return this.MAX_HEALTH;
   }
 } 

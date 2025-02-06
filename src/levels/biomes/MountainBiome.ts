@@ -187,19 +187,33 @@ export class MountainBiome extends Biome {
   }
 
   private spawnTrolls() {
-    // Spawn 3 trolls at strategic locations on the mountain
-    const trollPositions = [
-      { x: 0.3, z: 0.3 },  // Near the base
-      { x: 0.5, z: 0.5 },  // Near the peak
-      { x: 0.7, z: 0.7 }   // Another side
+    // Define strategic protection points on the mountain
+    const protectionPoints = [
+      { x: 0.3, z: 0.3, height: this.MAX_HEIGHT * 0.3 },  // Lower slopes
+      { x: 0.5, z: 0.5, height: this.MAX_HEIGHT * 0.7 },  // Near peak
+      { x: 0.7, z: 0.7, height: this.MAX_HEIGHT * 0.5 }   // Mid-level
     ];
 
-    trollPositions.forEach(pos => {
+    // Get mountain bounds
+    const bounds = {
+      min: new THREE.Vector2(
+        this.position.x - this.size.x/2,
+        this.position.y - this.size.y/2
+      ),
+      max: new THREE.Vector2(
+        this.position.x + this.size.x/2,
+        this.position.y + this.size.y/2
+      )
+    };
+
+    protectionPoints.forEach(pos => {
       const worldX = this.position.x - this.size.x/2 + pos.x * this.size.x;
       const worldZ = this.position.y - this.size.y/2 + pos.z * this.size.y;
-      const height = this.getGroundHeight(new THREE.Vector3(worldX, 0, worldZ));
+      const spawnPosition = new THREE.Vector3(worldX, pos.height + 1, worldZ);
       
-      const troll = new Troll(new THREE.Vector3(worldX, height + 1, worldZ));
+      const troll = new Troll(spawnPosition);
+      troll.setMountainBounds(bounds.min, bounds.max);
+      troll.setProtectionPoint(spawnPosition);
       this.trolls.push(troll);
       this.scene.add(troll.mesh);
     });
@@ -208,12 +222,18 @@ export class MountainBiome extends Biome {
   public update(delta: number, playerPosition: THREE.Vector3) {
     // Update all trolls
     this.trolls.forEach(troll => {
-      // Set player as target
-      troll.setTarget(playerPosition);
+      // Only target player if they're climbing the mountain
+      const groundHeight = this.getGroundHeight(playerPosition);
+      if (groundHeight > this.MAX_HEIGHT * 0.3) { // If player is climbing
+        troll.setTarget(playerPosition);
+      } else {
+        // Let the troll handle its own patrolling behavior
+        troll.setTarget(troll.getProtectionPoint()?.clone() || playerPosition);
+      }
       
       // Update troll with current ground height
-      const groundHeight = this.getGroundHeight(troll.mesh.position);
-      troll.update(delta, groundHeight);
+      const trollGroundHeight = this.getGroundHeight(troll.mesh.position);
+      troll.update(delta, trollGroundHeight);
     });
   }
 
