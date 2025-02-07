@@ -87,7 +87,7 @@ export class Character extends Entity {
       metalness: 0.1
     });
 
-    // Create yellow material for all edges
+    // Create yellow material for robe edges
     const yellowMaterial = new THREE.MeshStandardMaterial({
       color: 0xFFFF00,
       roughness: 0.5,
@@ -105,8 +105,6 @@ export class Character extends Entity {
       const segment = new THREE.Mesh(geometry, bodyMaterial);
 
       // Create yellow edge trim for full circle
-
-      // Create thin strips for the edges
       const topEdge = new THREE.Mesh(
         new THREE.TorusGeometry(topRadius, 0.005, 8, segments, Math.PI * 2),
         yellowMaterial
@@ -142,78 +140,10 @@ export class Character extends Entity {
     // Store for animation
     this.body.userData = { robeSegments };
 
-    // Create shirt with yellow outline
+    // Create shirt (without yellow outline)
     const bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
     bodyMesh.position.y = 0.25;
-
-    // Add yellow edges to shirt
-    const shirtEdges = new THREE.Group();
-    const edgeSize = 0.005;
-
-    // Vertical edges
-    for (let x of [-0.35, 0.35]) {
-      for (let z of [-0.175, 0.175]) {
-        const edge = new THREE.Mesh(
-          new THREE.BoxGeometry(edgeSize, 0.5, edgeSize),
-          yellowMaterial
-        );
-        edge.position.set(x, 0.25, z);
-        shirtEdges.add(edge);
-      }
-    }
-
-    // Horizontal edges
-    for (let y of [0, 0.5]) {
-      for (let z of [-0.175, 0.175]) {
-        const edge = new THREE.Mesh(
-          new THREE.BoxGeometry(0.7, edgeSize, edgeSize),
-          yellowMaterial
-        );
-        edge.position.set(0, y + 0.25, z);
-        shirtEdges.add(edge);
-      }
-    }
-
     this.body.add(bodyMesh);
-    this.body.add(shirtEdges);
-
-    // Add yellow edges to pants (legs) - now the legs exist because createLegs was called first
-    const addEdgesToLeg = (leg: THREE.Group) => {
-      const thigh = leg.children[0] as THREE.Mesh;
-      if (!thigh) return; // Safety check
-      
-      const thighEdges = new THREE.Group();
-      
-      // Vertical edges for thigh
-      for (let x of [-0.125, 0.125]) {
-        for (let z of [-0.125, 0.125]) {
-          const edge = new THREE.Mesh(
-            new THREE.BoxGeometry(edgeSize, 0.3, edgeSize),
-            yellowMaterial
-          );
-          edge.position.set(x, -0.15, z);
-          thighEdges.add(edge);
-        }
-      }
-
-      // Horizontal edges for thigh
-      for (let y of [0, -0.3]) {
-        for (let z of [-0.125, 0.125]) {
-          const edge = new THREE.Mesh(
-            new THREE.BoxGeometry(0.25, edgeSize, edgeSize),
-            yellowMaterial
-          );
-          edge.position.set(0, y, z);
-          thighEdges.add(edge);
-        }
-      }
-
-      thigh.add(thighEdges);
-    };
-
-    // Add edges to legs only if they exist
-    if (this.leftLeg.children.length > 0) addEdgesToLeg(this.leftLeg);
-    if (this.rightLeg.children.length > 0) addEdgesToLeg(this.rightLeg);
 
     // Add robe last to ensure it's rendered on top
     this.mesh.add(this.body);
@@ -238,18 +168,25 @@ export class Character extends Entity {
       metalness: 0.2
     });
 
+    // Create black material for brim
+    const brimMaterial = new THREE.MeshStandardMaterial({
+      color: 0x000000, // Black
+      roughness: 0.7,
+      metalness: 0.2
+    });
+
     // Create hat as one piece
     const hatGroup = new THREE.Group();
 
     // Wide brim
     const hatBrimGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.05, 16);
-    const hatBrim = new THREE.Mesh(hatBrimGeometry, hatMaterial);
+    const hatBrim = new THREE.Mesh(hatBrimGeometry, brimMaterial);
     hatGroup.add(hatBrim);
 
     // Main cone (smaller and upright)
-    const hatConeGeometry = new THREE.ConeGeometry(0.35, 0.45, 16); // Keep cone same size
+    const hatConeGeometry = new THREE.ConeGeometry(0.35, 0.45, 16);
     const hatCone = new THREE.Mesh(hatConeGeometry, hatMaterial);
-    hatCone.position.y = 0.275; // Half of cone height (0.45/2) plus half of brim height (0.05/2)
+    hatCone.position.y = 0.25; // Adjusted to close the gap with brim
     hatGroup.add(hatCone);
 
     // Position the entire hat
@@ -280,7 +217,13 @@ export class Character extends Entity {
     mouth.position.set(0, -0.15, 0.25);
     this.head.add(mouth);
 
-    this.head.position.y = 0.8;
+    // Create a small neck to connect head and body
+    const neckGeometry = new THREE.BoxGeometry(0.2, 0.1, 0.2);
+    const neck = new THREE.Mesh(neckGeometry, skinMaterial);
+    neck.position.y = -0.3; // Position at bottom of head
+    this.head.add(neck);
+
+    this.head.position.y = 0.85; // Raised to accommodate neck
     this.mesh.add(this.head);
   }
 
