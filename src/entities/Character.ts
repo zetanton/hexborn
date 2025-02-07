@@ -517,9 +517,7 @@ export class Character extends Entity {
       color: 0x000000,
       roughness: 0.7,
       metalness: 0.1,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.7
+      side: THREE.DoubleSide
     });
 
     this.capeMesh = new THREE.Mesh(geometry, material);
