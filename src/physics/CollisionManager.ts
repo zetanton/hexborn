@@ -10,6 +10,7 @@ import { MountainBiome } from '../levels/biomes/MountainBiome';
 import { SwampBiome } from '../levels/biomes/SwampBiome';
 import { Troll } from '../entities/Troll';
 import { Frog } from '../entities/Frog';
+import { Alligator } from '../entities/Alligator';
 
 export class CollisionManager {
 
@@ -24,6 +25,10 @@ export class CollisionManager {
 
     private isFrog(entity: Entity): entity is Frog {
         return entity instanceof Frog;
+    }
+
+    private isAlligator(entity: Entity): entity is Alligator {
+        return entity instanceof Alligator;
     }
 
     public handleCollisions(currentBiome: Biome | null) {
@@ -115,6 +120,7 @@ export class CollisionManager {
 
     private handleSwampCollisions(swampBiome: SwampBiome) {
         const frogs = swampBiome.getFrogs();
+        const alligators = swampBiome.getAlligators();
         const lilyPads = swampBiome.getLilyPads();
         const characterPos = this.character.mesh.position;
 
@@ -147,32 +153,47 @@ export class CollisionManager {
                     }
                 }
             }
+        }
 
-            // Check frog collision with lily pads
-            for (const lilyPad of lilyPads) {
-                const frogToLilyDx = frog.mesh.position.x - lilyPad.mesh.position.x;
-                const frogToLilyDz = frog.mesh.position.z - lilyPad.mesh.position.z;
-                const frogToLilyDist = Math.sqrt(frogToLilyDx * frogToLilyDx + frogToLilyDz * frogToLilyDz);
+        // Handle alligator collisions with character and each other
+        for (const alligator of alligators) {
+            // Check alligator collision with character
+            const dx = characterPos.x - alligator.mesh.position.x;
+            const dz = characterPos.z - alligator.mesh.position.z;
+            const quickDist = dx * dx + dz * dz;
+            const minDist = (this.character.collisionRadius + alligator.collisionRadius) * 2;
+            
+            if (quickDist < minDist * minDist && this.character.checkCollision(alligator)) {
+                this.resolveCollision(this.character, alligator);
+                if (this.isAlligator(alligator)) {
+                    this.character.onCollideWithMonster(alligator);
+                    alligator.onCollideWithCharacter(this.character);
+                }
+            }
 
-                // Check if frog is above the lily pad and within its radius
-                if (frogToLilyDist <= lilyPad.collisionRadius && this.isFrog(frog)) {
-                    const lilyPadHeight = lilyPad.mesh.position.y + lilyPad.getFloatOffset();
-                    const heightDiff = frog.mesh.position.y - lilyPadHeight;
-                    
-                    // If frog is above the lily pad and falling or at rest
-                    if (heightDiff > 0 && heightDiff < 5) {
-                        const frogVelocity = frog.getVelocity();
-                        if (frogVelocity.y <= 0.1) {
-                            // Set the lily pad and adjust frog's position
-                            frog.setLilyPad(lilyPad);
-                            // Stop any horizontal movement
-                            frogVelocity.x = 0;
-                            frogVelocity.z = 0;
-                            // Ensure frog is properly positioned on pad
-                            frog.mesh.position.y = lilyPadHeight + 0.5;
-                            break; // Exit loop once we've found a suitable lily pad
-                        }
+            // Check alligator collision with other alligators
+            for (const otherAlligator of alligators) {
+                if (alligator !== otherAlligator) {
+                    const alligatorDx = alligator.mesh.position.x - otherAlligator.mesh.position.x;
+                    const alligatorDz = alligator.mesh.position.z - otherAlligator.mesh.position.z;
+                    const alligatorDist = alligatorDx * alligatorDx + alligatorDz * alligatorDz;
+                    const alligatorMinDist = (alligator.collisionRadius + otherAlligator.collisionRadius) * 2;
+
+                    if (alligatorDist < alligatorMinDist * alligatorMinDist) {
+                        this.resolveCollision(alligator, otherAlligator);
                     }
+                }
+            }
+
+            // Check alligator collision with frogs (alligators can damage frogs)
+            for (const frog of frogs) {
+                const frogDx = alligator.mesh.position.x - frog.mesh.position.x;
+                const frogDz = alligator.mesh.position.z - frog.mesh.position.z;
+                const frogDist = frogDx * frogDx + frogDz * frogDz;
+                const frogMinDist = (alligator.collisionRadius + frog.collisionRadius) * 2;
+
+                if (frogDist < frogMinDist * frogMinDist) {
+                    this.resolveCollision(alligator, frog);
                 }
             }
         }

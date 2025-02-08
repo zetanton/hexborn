@@ -3,6 +3,7 @@ import { Biome } from './Biome';
 import { LilyPad } from '../../entities/LilyPad';
 import { Frog } from '../../entities/Frog';
 import { Character } from '../../entities/Character';
+import { Alligator } from '../../entities/Alligator';
 
 export class SwampBiome extends Biome {
   private heightMap: number[][] = [];
@@ -17,6 +18,7 @@ export class SwampBiome extends Biome {
   private targetFogDensity: number = 0;
   private lilyPads: LilyPad[] = [];
   private frogs: Frog[] = [];
+  private alligators: Alligator[] = [];
 
   protected generateTerrain(): void {
     this.generateHeightMap();
@@ -26,6 +28,7 @@ export class SwampBiome extends Biome {
     this.createFog();
     this.createLilyPads();
     this.createFrogs();
+    this.createAlligators();
   }
 
   private generateHeightMap() {
@@ -317,10 +320,63 @@ export class SwampBiome extends Biome {
       }
 
       if (validPosition) {
-        const frog = new Frog(position);
+        const frog = new Frog(position, this);
         frog.setSwampBounds(swampMin, swampMax);
         this.frogs.push(frog);
         this.addObject(frog.mesh);
+      }
+    }
+  }
+
+  private createAlligators() {
+    const alligatorCount = 2; // Number of alligators to create
+    const minDistance = 50; // Minimum distance between alligators
+
+    // Calculate swamp bounds
+    const swampMin = new THREE.Vector2(
+      this.position.x - this.size.x/2,
+      this.position.y - this.size.y/2
+    );
+    const swampMax = new THREE.Vector2(
+      this.position.x + this.size.x/2,
+      this.position.y + this.size.y/2
+    );
+
+    for (let i = 0; i < alligatorCount; i++) {
+      let attempts = 0;
+      let position = new THREE.Vector3();
+      let validPosition = false;
+
+      // Try to find a valid position
+      while (!validPosition && attempts < 50) {
+        const x = this.position.x - this.size.x/2 + Math.random() * this.size.x;
+        const z = this.position.y - this.size.y/2 + Math.random() * this.size.y;
+        const groundHeight = this.getGroundHeight(new THREE.Vector3(x, 0, z));
+        position.set(x, groundHeight + 1, z);
+
+        // Check distance from other alligators
+        validPosition = true;
+        for (const existingAlligator of this.alligators) {
+          const distance = position.distanceTo(existingAlligator.mesh.position);
+          if (distance < minDistance) {
+            validPosition = false;
+            break;
+          }
+        }
+
+        // Check if position is near deep water
+        if (groundHeight > this.WATER_LEVEL - 0.2) {
+          validPosition = false;
+        }
+
+        attempts++;
+      }
+
+      if (validPosition) {
+        const alligator = new Alligator(position, this);
+        alligator.setSwampBounds(swampMin, swampMax);
+        this.alligators.push(alligator);
+        this.addObject(alligator.mesh);
       }
     }
   }
@@ -348,6 +404,21 @@ export class SwampBiome extends Biome {
       }
       frog.update(delta, this.getGroundHeight(frog.mesh.position));
     }
+
+    // Update alligators
+    for (const alligator of this.alligators) {
+      // Only update target if alligator is not in the middle of an action
+      if (!alligator.isPerformingAction()) {
+        // Only set player as target if they're within aggro range
+        const distanceToPlayer = alligator.mesh.position.distanceTo(playerPosition);
+        if (distanceToPlayer <= 20) { // Use alligator's AGGRO_RANGE
+          alligator.setTarget(player);
+        } else if (alligator.hasPlayerTarget()) {
+          alligator.clearTarget(); // Clear player target if they're too far
+        }
+      }
+      alligator.update(delta, this.getGroundHeight(alligator.mesh.position));
+    }
   }
 
   // Add getter for frogs (for collision handling)
@@ -358,5 +429,10 @@ export class SwampBiome extends Biome {
   // Add getter for lily pads (for collision handling)
   public getLilyPads(): LilyPad[] {
     return this.lilyPads;
+  }
+
+  // Add getter for alligators (for collision handling)
+  public getAlligators(): Alligator[] {
+    return this.alligators;
   }
 } 

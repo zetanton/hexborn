@@ -281,7 +281,8 @@ export class Game {
             currentBiome.update(delta, this.character.mesh.position);
         } else if (currentBiome instanceof SwampBiome) {
             const frogs = currentBiome.getFrogs();
-            this.monsters.push(...frogs);
+            const alligators = currentBiome.getAlligators();
+            this.monsters.push(...frogs, ...alligators);
             currentBiome.update(delta, this.character.mesh.position, this.character);
         } else if (currentBiome instanceof CityBiome) {
             const lurkers: RedLurker[] = currentBiome.getRedLurkers();
@@ -306,7 +307,7 @@ export class Game {
     this.collisionManager.handleCollisions(currentBiome);
 
     // Update environment effects (fog, etc.)
-    this.currentLevel.updateEnvironment(this.character.mesh.position);
+    this.currentLevel.updateEnvironment(this.character.mesh.position, this.character);
 
     this.updateCamera();
     
