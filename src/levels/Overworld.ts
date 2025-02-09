@@ -252,8 +252,51 @@ export class Overworld {
   }
 
   private createOcean(height: number = -10) {
-    // Create the ocean floor first
-    const oceanFloorGeometry = new THREE.PlaneGeometry(this.WORLD_BARRIER_SIZE * 2, this.WORLD_BARRIER_SIZE * 2);
+    // Create the bedrock layer under biomes
+    const bedrockGeometry = new THREE.BoxGeometry(
+      this.SPACING * this.biomes.length, // Length to cover all biomes
+      20, // Thick bedrock layer
+      this.BIOME_SIZE.y // Width to match biome size
+    );
+
+    const bedrockMaterial = new THREE.MeshStandardMaterial({
+      color: 0x6e260e, // Earthy brown color
+      roughness: 0.9,  // Very rough
+      metalness: 0.1   // Slightly metallic for some variation
+    });
+
+    const bedrock = new THREE.Mesh(bedrockGeometry, bedrockMaterial);
+    bedrock.position.set(
+      (this.SPACING * (this.biomes.length - 1)) / 2, // Center along biomes
+      height - 10, // Position below biomes
+      0
+    );
+    this.scene.add(bedrock);
+
+    // Calculate biome area bounds
+    const biomeStartX = -this.BIOME_SIZE.x/2;
+    const biomeEndX = (this.SPACING * (this.biomes.length - 1)) + this.BIOME_SIZE.x/2;
+    const biomeStartZ = -this.BIOME_SIZE.y/2;
+    const biomeEndZ = this.BIOME_SIZE.y/2;
+
+    // Create ocean floor with a hole for biomes
+    const oceanFloorShape = new THREE.Shape();
+    oceanFloorShape.moveTo(-this.WORLD_BARRIER_SIZE, -this.WORLD_BARRIER_SIZE);
+    oceanFloorShape.lineTo(this.WORLD_BARRIER_SIZE, -this.WORLD_BARRIER_SIZE);
+    oceanFloorShape.lineTo(this.WORLD_BARRIER_SIZE, this.WORLD_BARRIER_SIZE);
+    oceanFloorShape.lineTo(-this.WORLD_BARRIER_SIZE, this.WORLD_BARRIER_SIZE);
+    oceanFloorShape.lineTo(-this.WORLD_BARRIER_SIZE, -this.WORLD_BARRIER_SIZE);
+
+    // Create hole for biomes
+    const biomeHole = new THREE.Path();
+    biomeHole.moveTo(biomeStartX, biomeStartZ);
+    biomeHole.lineTo(biomeEndX, biomeStartZ);
+    biomeHole.lineTo(biomeEndX, biomeEndZ);
+    biomeHole.lineTo(biomeStartX, biomeEndZ);
+    biomeHole.lineTo(biomeStartX, biomeStartZ);
+    oceanFloorShape.holes.push(biomeHole);
+
+    const oceanFloorGeometry = new THREE.ShapeGeometry(oceanFloorShape);
     const oceanFloorMaterial = new THREE.MeshStandardMaterial({
       color: 0x001e4d,
       metalness: 0.6,
@@ -263,11 +306,11 @@ export class Overworld {
     
     const oceanFloor = new THREE.Mesh(oceanFloorGeometry, oceanFloorMaterial);
     oceanFloor.rotation.x = -Math.PI / 2;
-    oceanFloor.position.y = height - 0.5; // Slightly below the water surface
+    oceanFloor.position.y = height - 0.5;
     this.scene.add(oceanFloor);
 
-    // Create the water surface
-    const waterGeometry = new THREE.PlaneGeometry(this.WORLD_BARRIER_SIZE * 2, this.WORLD_BARRIER_SIZE * 2);
+    // Create water surface with the same hole pattern
+    const waterGeometry = new THREE.ShapeGeometry(oceanFloorShape);
 
     // Create water material with normal map
     this.water = new Water(waterGeometry, {
@@ -281,16 +324,16 @@ export class Overworld {
       ),
       sunDirection: new THREE.Vector3(0.5, 0.7, -1.0),
       sunColor: 0xffffff,
-      waterColor: 0xffffff, // Set to white to let ocean floor color show through
+      waterColor: 0xffffff,
       distortionScale: 4.0,
       fog: this.scene.fog !== undefined,
-      alpha: 0.4 // Reduced opacity to show ocean floor
+      alpha: 0.4
     });
 
     this.water.rotation.x = -Math.PI / 2;
     this.water.position.y = height;
     this.water.material.transparent = true;
-    this.water.material.opacity = 0.6; // Additional opacity control
+    this.water.material.opacity = 0.6;
 
     // Store uniforms for animation
     this.waterUniforms = this.water.material.uniforms;
