@@ -39,9 +39,9 @@ export class Game {
   private readonly DAY_SKY_COLOR = new THREE.Color(0x87ceeb); // Sky blue
   private readonly NIGHT_SKY_COLOR = new THREE.Color(0x1a1a2a); // Dark blue
   private readonly DAY_AMBIENT_INTENSITY = 0.5;
-  private readonly NIGHT_AMBIENT_INTENSITY = 0.1;
+  private readonly NIGHT_AMBIENT_INTENSITY = 0.05; // Much darker at night
   private readonly DAY_SUN_INTENSITY = 1.0;
-  private readonly NIGHT_SUN_INTENSITY = 0.1;
+  private readonly NIGHT_SUN_INTENSITY = 0.05; // Much less moonlight
 
   // Time control functions
   private updateTimeDisplay: () => void = () => {};
