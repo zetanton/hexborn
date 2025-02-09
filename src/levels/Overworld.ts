@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Water } from 'three/examples/jsm/objects/Water.js';
 import { Biome } from './biomes/Biome';
 import { WinterBiome } from './biomes/WinterBiome';
 import { DesertBiome } from './biomes/DesertBiome';
@@ -78,6 +79,8 @@ export class Overworld {
   private readonly VISIBILITY_RANGE = 1500; // 5 biomes worth of distance
   private activeChunks: Set<Biome> = new Set();
   private barriers: THREE.Mesh[] = [];
+  private water: Water | null = null;
+  private waterUniforms: { [uniform: string]: THREE.IUniform } | null = null;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -249,23 +252,60 @@ export class Overworld {
   }
 
   private createOcean(height: number = -10) {
-    const oceanGeometry = new THREE.PlaneGeometry(this.WORLD_BARRIER_SIZE * 2, this.WORLD_BARRIER_SIZE * 2);
-    const oceanMaterial = new THREE.MeshStandardMaterial({
-      color: 0x0077be,
-      roughness: 0.0,
-      metalness: 0.1,
-      transparent: true,
-      opacity: 0.8
+    // Create the ocean floor first
+    const oceanFloorGeometry = new THREE.PlaneGeometry(this.WORLD_BARRIER_SIZE * 2, this.WORLD_BARRIER_SIZE * 2);
+    const oceanFloorMaterial = new THREE.MeshStandardMaterial({
+      color: 0x001e4d,
+      metalness: 0.6,
+      roughness: 0.2,
+      side: THREE.FrontSide
     });
-    const ocean = new THREE.Mesh(oceanGeometry, oceanMaterial);
-    ocean.rotation.x = -Math.PI / 2;
-    ocean.position.y = height;
-    this.scene.add(ocean);
+    
+    const oceanFloor = new THREE.Mesh(oceanFloorGeometry, oceanFloorMaterial);
+    oceanFloor.rotation.x = -Math.PI / 2;
+    oceanFloor.position.y = height - 0.5; // Slightly below the water surface
+    this.scene.add(oceanFloor);
 
-    // Animate ocean waves
+    // Create the water surface
+    const waterGeometry = new THREE.PlaneGeometry(this.WORLD_BARRIER_SIZE * 2, this.WORLD_BARRIER_SIZE * 2);
+
+    // Create water material with normal map
+    this.water = new Water(waterGeometry, {
+      textureWidth: 512,
+      textureHeight: 512,
+      waterNormals: new THREE.TextureLoader().load(
+        'textures/waternormals.jpg',
+        (texture) => {
+          texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+        }
+      ),
+      sunDirection: new THREE.Vector3(0.5, 0.7, -1.0),
+      sunColor: 0xffffff,
+      waterColor: 0xffffff, // Set to white to let ocean floor color show through
+      distortionScale: 4.0,
+      fog: this.scene.fog !== undefined,
+      alpha: 0.4 // Reduced opacity to show ocean floor
+    });
+
+    this.water.rotation.x = -Math.PI / 2;
+    this.water.position.y = height;
+    this.water.material.transparent = true;
+    this.water.material.opacity = 0.6; // Additional opacity control
+
+    // Store uniforms for animation
+    this.waterUniforms = this.water.material.uniforms;
+
+    this.scene.add(this.water);
+
+    // Start water animation
+    this.animateWater();
+  }
+
+  private animateWater() {
     const animate = () => {
-      const time = Date.now() * 0.001;
-      ocean.position.y = height + Math.sin(time) * 0.2;
+      if (this.water && this.waterUniforms) {
+        this.waterUniforms['time'].value += 1.0 / 60.0;
+      }
       requestAnimationFrame(animate);
     };
     animate();

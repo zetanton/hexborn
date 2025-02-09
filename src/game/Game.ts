@@ -23,7 +23,7 @@ export class Game {
   private readonly CAMERA_DISTANCE = 8;
   private readonly CAMERA_HEIGHT = 3;
   private readonly MOUSE_SENSITIVITY = 0.002;
-  private readonly VERTICAL_LIMIT = Math.PI / 3; // 60 degrees limit
+  private readonly VERTICAL_LIMIT = Math.PI / 4; // Reduced to 45 degrees to prevent looking too far down
   private isPointerLocked: boolean = false;
   private collisionManager: CollisionManager;
   private debugMode: boolean = true;
@@ -473,7 +473,7 @@ export class Game {
     
     const cameraOffset = new THREE.Vector3(
       Math.sin(this.cameraRotation) * horizontalDistance,
-      this.CAMERA_HEIGHT + verticalOffset,
+      Math.max(1, this.CAMERA_HEIGHT + verticalOffset), // Ensure camera never goes below height of 1
       Math.cos(this.cameraRotation) * horizontalDistance
     );
     
