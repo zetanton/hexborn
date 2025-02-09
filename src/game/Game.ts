@@ -30,6 +30,24 @@ export class Game {
   private debugUIVisible: boolean = false;
   private debugUIPanel: HTMLDivElement | null = null;
 
+  // Day/Night cycle properties
+  private readonly DAY_LENGTH = 600; // 10 minutes in seconds
+  private readonly DAY_HALF = 300; // 5 minutes in seconds
+  private dayTime: number = 0;
+  private ambientLight: THREE.AmbientLight = new THREE.AmbientLight(0x404040, 0.5);
+  private sunLight: THREE.DirectionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+  private readonly DAY_SKY_COLOR = new THREE.Color(0x87ceeb); // Sky blue
+  private readonly NIGHT_SKY_COLOR = new THREE.Color(0x1a1a2a); // Dark blue
+  private readonly DAY_AMBIENT_INTENSITY = 0.5;
+  private readonly NIGHT_AMBIENT_INTENSITY = 0.1;
+  private readonly DAY_SUN_INTENSITY = 1.0;
+  private readonly NIGHT_SUN_INTENSITY = 0.1;
+
+  // Time control functions
+  private updateTimeDisplay: () => void = () => {};
+  private isTimePaused: () => boolean = () => false;
+  private readonly VISIBILITY_RANGE = 1500; // Match the value from Overworld.ts
+
   constructor(container: HTMLElement) {
     // Initialize scene
     this.scene = new THREE.Scene();
@@ -96,22 +114,22 @@ export class Game {
 
   private setupLighting() {
     // Ambient light
-    const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
-    this.scene.add(ambientLight);
+    this.ambientLight = new THREE.AmbientLight(0x404040, this.DAY_AMBIENT_INTENSITY);
+    this.scene.add(this.ambientLight);
 
     // Directional light (sun)
-    const sunLight = new THREE.DirectionalLight(0xffffff, 1);
-    sunLight.position.set(50, 50, 50);
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.width = 2048;
-    sunLight.shadow.mapSize.height = 2048;
-    sunLight.shadow.camera.near = 0.5;
-    sunLight.shadow.camera.far = 500;
-    sunLight.shadow.camera.left = -50;
-    sunLight.shadow.camera.right = 50;
-    sunLight.shadow.camera.top = 50;
-    sunLight.shadow.camera.bottom = -50;
-    this.scene.add(sunLight);
+    this.sunLight = new THREE.DirectionalLight(0xffffff, this.DAY_SUN_INTENSITY);
+    this.sunLight.position.set(50, 50, 50);
+    this.sunLight.castShadow = true;
+    this.sunLight.shadow.mapSize.width = 2048;
+    this.sunLight.shadow.mapSize.height = 2048;
+    this.sunLight.shadow.camera.near = 0.5;
+    this.sunLight.shadow.camera.far = 500;
+    this.sunLight.shadow.camera.left = -50;
+    this.sunLight.shadow.camera.right = 50;
+    this.sunLight.shadow.camera.top = 50;
+    this.sunLight.shadow.camera.bottom = -50;
+    this.scene.add(this.sunLight);
   }
 
   private setupMouseControls(container: HTMLElement) {
@@ -172,10 +190,69 @@ export class Game {
     healthDisplay.style.marginBottom = '10px';
     this.debugUIPanel.appendChild(healthDisplay);
 
+    // Add time control section
+    const timeSection = document.createElement('div');
+    timeSection.style.marginBottom = '10px';
+    timeSection.innerHTML = `
+      <strong>Time Controls</strong><br>
+      <div id="time-display">Time: 00:00</div>
+      <button id="toggle-time">Pause Time</button>
+      <button id="set-noon">Set to Noon</button>
+      <button id="set-midnight">Set to Midnight</button>
+      <input type="range" id="time-slider" min="0" max="${this.DAY_LENGTH}" value="0" style="width: 200px">
+    `;
+    this.debugUIPanel.appendChild(timeSection);
+
     // Add teleport instructions
     const teleportInstructions = document.createElement('div');
     teleportInstructions.innerHTML = '<strong>Debug Teleport Panel</strong><br>Press number keys (1-9) to teleport to a biome.';
     this.debugUIPanel.appendChild(teleportInstructions);
+
+    // Time control variables
+    let isTimePaused = false;
+
+    // Time control event listeners
+    const timeDisplay = timeSection.querySelector('#time-display') as HTMLDivElement;
+    const timeSlider = timeSection.querySelector('#time-slider') as HTMLInputElement;
+    const toggleButton = timeSection.querySelector('#toggle-time') as HTMLButtonElement;
+    const noonButton = timeSection.querySelector('#set-noon') as HTMLButtonElement;
+    const midnightButton = timeSection.querySelector('#set-midnight') as HTMLButtonElement;
+
+    toggleButton.addEventListener('click', () => {
+      isTimePaused = !isTimePaused;
+      toggleButton.textContent = isTimePaused ? 'Resume Time' : 'Pause Time';
+    });
+
+    noonButton.addEventListener('click', () => {
+      this.dayTime = this.DAY_LENGTH * 0.25; // 25% through the cycle
+      timeSlider.value = this.dayTime.toString();
+    });
+
+    midnightButton.addEventListener('click', () => {
+      this.dayTime = this.DAY_LENGTH * 0.75; // 75% through the cycle
+      timeSlider.value = this.dayTime.toString();
+    });
+
+    timeSlider.addEventListener('input', () => {
+      this.dayTime = parseFloat(timeSlider.value);
+    });
+
+    // Update time display in animate loop
+    this.updateTimeDisplay = () => {
+      if (!this.debugUIVisible) return;
+      
+      // Update slider
+      timeSlider.value = this.dayTime.toString();
+      
+      // Update time display
+      const minutes = Math.floor(this.dayTime / 60);
+      const seconds = Math.floor(this.dayTime % 60);
+      const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      timeDisplay.textContent = `Time: ${timeString}`;
+    };
+
+    // Store pause state for use in updateDayNightCycle
+    this.isTimePaused = () => isTimePaused;
 
     document.addEventListener('keydown', (e: KeyboardEvent) => {
       const key = e.key;
@@ -217,10 +294,81 @@ export class Game {
     });
   }
 
+  private updateDayNightCycle(delta: number) {
+    // Only update time if not paused
+    if (!this.isTimePaused()) {
+      this.dayTime = (this.dayTime + delta) % this.DAY_LENGTH;
+    }
+    
+    // Update debug display
+    this.updateTimeDisplay();
+    
+    // Calculate the time of day progress (0 to 1)
+    const timeProgress = this.dayTime / this.DAY_LENGTH;
+    
+    // Calculate day/night transition factor (0 = full night, 1 = full day)
+    let dayFactor: number;
+    if (this.dayTime < this.DAY_HALF) {
+      // Day time
+      dayFactor = Math.min(1, this.dayTime / (this.DAY_HALF * 0.2)); // Transition in first 20% of day
+    } else {
+      // Night time
+      const nightProgress = (this.dayTime - this.DAY_HALF) / this.DAY_HALF;
+      dayFactor = Math.max(0, 1 - (nightProgress / 0.2)); // Transition in first 20% of night
+    }
+
+    // Update sky color
+    const skyColor = new THREE.Color();
+    skyColor.copy(this.NIGHT_SKY_COLOR).lerp(this.DAY_SKY_COLOR, dayFactor);
+    this.scene.background = skyColor;
+    
+    // Update fog with increased distance for better visibility of distant biomes
+    if (this.scene.fog) {
+      const fog = this.scene.fog as THREE.Fog;
+      fog.color.copy(skyColor);
+      // Adjust fog distances based on time of day
+      const dayFogNear = this.VISIBILITY_RANGE * 0.6;
+      const dayFogFar = this.VISIBILITY_RANGE * 1.4;
+      const nightFogNear = this.VISIBILITY_RANGE * 0.4;
+      const nightFogFar = this.VISIBILITY_RANGE * 1.0;
+      
+      fog.near = THREE.MathUtils.lerp(nightFogNear, dayFogNear, dayFactor);
+      fog.far = THREE.MathUtils.lerp(nightFogFar, dayFogFar, dayFactor);
+    }
+
+    // Update ambient light
+    const ambientIntensity = THREE.MathUtils.lerp(
+      this.NIGHT_AMBIENT_INTENSITY,
+      this.DAY_AMBIENT_INTENSITY,
+      dayFactor
+    );
+    this.ambientLight.intensity = ambientIntensity;
+
+    // Update sun light
+    const sunIntensity = THREE.MathUtils.lerp(
+      this.NIGHT_SUN_INTENSITY,
+      this.DAY_SUN_INTENSITY,
+      dayFactor
+    );
+    this.sunLight.intensity = sunIntensity;
+
+    // Update sun position for day/night cycle
+    const sunAngle = (timeProgress * Math.PI * 2) - Math.PI / 2;
+    const sunRadius = 50;
+    this.sunLight.position.set(
+      Math.cos(sunAngle) * sunRadius,
+      Math.sin(sunAngle) * sunRadius,
+      50
+    );
+  }
+
   private animate = () => {
     requestAnimationFrame(this.animate);
 
     const delta = 1/60;
+
+    // Update day/night cycle
+    this.updateDayNightCycle(delta);
 
     // Update debug panel if visible
     if (this.debugUIVisible && this.debugUIPanel) {

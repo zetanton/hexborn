@@ -9,23 +9,37 @@ export class SwampBiome extends Biome {
   private heightMap: number[][] = [];
   private readonly GRID_SIZE = 100;
   private readonly WATER_LEVEL = 0.5;
-  private readonly FOG_TRANSITION_SPEED = 0.05; // Controls how fast fog changes
-  private readonly FOG_COLOR = 0x2f4f2f; // Darker swamp green
-  private readonly FOG_NEAR = 10; // Closer fog start
-  private readonly FOG_FAR = 50; // Shorter view distance
+  private readonly FOG_TRANSITION_SPEED = 0.005;
+  private readonly FOG_COLOR = new THREE.Color(0x2a3524); // Murky brown-green
+  private readonly FOG_NEAR = 20;
+  private readonly FOG_FAR = 100;
   private fog: THREE.Fog | null = null;
   private currentFogDensity: number = 0;
   private targetFogDensity: number = 0;
+  private originalSceneFog: THREE.Fog | null = null;
   private lilyPads: LilyPad[] = [];
   private frogs: Frog[] = [];
   private alligators: Alligator[] = [];
+
+  constructor(scene: THREE.Scene, position: THREE.Vector2, size: THREE.Vector2) {
+    super(scene, position, size);
+    // Store the original scene fog for later restoration
+    if (this.scene.fog && this.scene.fog instanceof THREE.Fog) {
+      this.originalSceneFog = new THREE.Fog(
+        this.scene.fog.color.clone(),
+        this.scene.fog.near,
+        this.scene.fog.far
+      );
+    }
+    // Initialize swamp fog immediately
+    this.createFog();
+  }
 
   protected generateTerrain(): void {
     this.generateHeightMap();
     this.createSwampGround();
     this.createSwampWater();
     this.createVegetation();
-    this.createFog();
     this.createLilyPads();
     this.createFrogs();
     this.createAlligators();
@@ -183,28 +197,47 @@ export class SwampBiome extends Biome {
   }
 
   private createFog() {
-    // Store fog settings but don't apply to scene directly
-    this.fog = new THREE.Fog(this.FOG_COLOR, this.FOG_NEAR, this.FOG_FAR);
+    // Create swamp-specific fog with the murky color
+    this.fog = new THREE.Fog(this.FOG_COLOR.clone(), this.FOG_NEAR, this.FOG_FAR);
   }
 
   public updateFog(position: THREE.Vector3) {
-    if (!this.fog) return;
+    if (!this.fog) {
+      this.createFog();
+      return;
+    }
+
+    // Calculate distance from center of swamp
+    const distanceToCenter = new THREE.Vector2(
+      position.x - this.position.x,
+      position.z - this.position.y
+    ).length();
+
+    // Calculate fog density based on distance with a smoother transition zone
+    const maxDistance = this.size.x / 2;
+    const transitionZone = maxDistance * 0.2; // 20% of the distance is transition zone
+    const normalizedDistance = Math.max(0, Math.min(1, 
+      (distanceToCenter - (maxDistance - transitionZone)) / transitionZone
+    ));
     
-    // Set target fog density based on position
-    this.targetFogDensity = this.isInBiome(position) ? 1 : 0;
-    
+    // Set target fog density (1 when in swamp, 0 when outside)
+    this.targetFogDensity = 1 - normalizedDistance;
+
     // Smoothly interpolate current fog density
     this.currentFogDensity += (this.targetFogDensity - this.currentFogDensity) * this.FOG_TRANSITION_SPEED;
-    
-    // Apply fog with current density
-    if (this.currentFogDensity > 0.01) { // Only apply fog if it's visible
-      this.fog.color.setHex(this.FOG_COLOR);
-      // Interpolate fog distances based on density
-      this.fog.near = this.FOG_NEAR + (100 - this.FOG_NEAR) * (1 - this.currentFogDensity);
-      this.fog.far = this.FOG_FAR + (200 - this.FOG_FAR) * (1 - this.currentFogDensity);
+
+    // Apply fog when in or near swamp
+    if (this.currentFogDensity > 0.01) {
+      // Set the swamp fog
       this.scene.fog = this.fog;
-    } else if (this.scene.fog === this.fog) {
-      this.scene.fog = null;
+      
+      // Update fog properties
+      this.fog.color.copy(this.FOG_COLOR);
+      this.fog.near = THREE.MathUtils.lerp(150, this.FOG_NEAR, this.currentFogDensity);
+      this.fog.far = THREE.MathUtils.lerp(1000, this.FOG_FAR, this.currentFogDensity);
+    } else if (this.originalSceneFog) {
+      // Restore original scene fog when outside swamp
+      this.scene.fog = this.originalSceneFog;
     }
   }
 

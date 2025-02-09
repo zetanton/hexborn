@@ -71,7 +71,7 @@ export class Overworld {
   private scene: THREE.Scene;
   private biomes: Biome[] = [];
   private readonly BIOME_SIZE = new THREE.Vector2(300, 300);
-  private readonly WORLD_BARRIER_SIZE = 2000;
+  private readonly WORLD_BARRIER_SIZE = 4000;
   private birds: THREE.Group[] = [];
   private clouds: THREE.Mesh[] = [];
   private readonly SPACING = 300;
@@ -97,13 +97,19 @@ export class Overworld {
   private setupWorld() {
     // Create larger sky for better fog effect
     const sky = new THREE.Mesh(
-      new THREE.SphereGeometry(this.WORLD_BARRIER_SIZE, 32, 32),
-      new THREE.MeshBasicMaterial({
+      new THREE.SphereGeometry(this.WORLD_BARRIER_SIZE, 64, 64),
+      new THREE.MeshStandardMaterial({
         color: 0x87CEEB,
         side: THREE.BackSide,
-        fog: true
+        fog: true,
+        roughness: 1,
+        metalness: 0,
+        emissive: 0x87CEEB,
+        emissiveIntensity: 0.2,
+        depthWrite: false
       })
     );
+    sky.position.set(750, 0, 0);
     this.scene.add(sky);
 
     // Create biomes in a linear arrangement
