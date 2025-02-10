@@ -103,6 +103,7 @@ export class Character extends Entity {
       
       // Create the main robe segment
       const segment = new THREE.Mesh(geometry, bodyMaterial);
+      segment.castShadow = true;
 
       // Create yellow edge trim for full circle
       const topEdge = new THREE.Mesh(
@@ -111,6 +112,7 @@ export class Character extends Entity {
       );
       topEdge.position.y = height/2;
       topEdge.rotation.x = Math.PI/2;
+      topEdge.castShadow = true;
 
       const bottomEdge = new THREE.Mesh(
         new THREE.TorusGeometry(bottomRadius, 0.005, 8, segments, Math.PI * 2),
@@ -118,6 +120,7 @@ export class Character extends Entity {
       );
       bottomEdge.position.y = -height/2;
       bottomEdge.rotation.x = Math.PI/2;
+      bottomEdge.castShadow = true;
 
       // Create a group to hold all pieces
       const segmentGroup = new THREE.Group();
@@ -143,6 +146,7 @@ export class Character extends Entity {
     // Create shirt (without yellow outline)
     const bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
     bodyMesh.position.y = 0.25;
+    bodyMesh.castShadow = true;
     this.body.add(bodyMesh);
 
     // Add robe last to ensure it's rendered on top
@@ -159,6 +163,7 @@ export class Character extends Entity {
     });
 
     const headMesh = new THREE.Mesh(headGeometry, skinMaterial);
+    headMesh.castShadow = true;
     this.head.add(headMesh);
 
     // Add wizard hat
@@ -181,12 +186,14 @@ export class Character extends Entity {
     // Wide brim
     const hatBrimGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.05, 16);
     const hatBrim = new THREE.Mesh(hatBrimGeometry, brimMaterial);
+    hatBrim.castShadow = true;
     hatGroup.add(hatBrim);
 
     // Main cone (smaller and upright)
     const hatConeGeometry = new THREE.ConeGeometry(0.35, 0.45, 16);
     const hatCone = new THREE.Mesh(hatConeGeometry, hatMaterial);
     hatCone.position.y = 0.25; // Adjusted to close the gap with brim
+    hatCone.castShadow = true;
     hatGroup.add(hatCone);
 
     // Position the entire hat
@@ -204,10 +211,12 @@ export class Character extends Entity {
     const eyeGeometry = new THREE.BoxGeometry(0.15, 0.1, 0.1);
     const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
     leftEye.position.set(-0.15, 0, 0.25);
+    leftEye.castShadow = true;
     this.head.add(leftEye);
 
     const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
     rightEye.position.set(0.15, 0, 0.25);
+    rightEye.castShadow = true;
     this.head.add(rightEye);
 
     // Mouth
@@ -215,12 +224,14 @@ export class Character extends Entity {
     const mouthMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
     const mouth = new THREE.Mesh(mouthGeometry, mouthMaterial);
     mouth.position.set(0, -0.15, 0.25);
+    mouth.castShadow = true;
     this.head.add(mouth);
 
     // Create a small neck to connect head and body
     const neckGeometry = new THREE.BoxGeometry(0.2, 0.1, 0.2);
     const neck = new THREE.Mesh(neckGeometry, skinMaterial);
     neck.position.y = -0.3; // Position at bottom of head
+    neck.castShadow = true;
     this.head.add(neck);
 
     this.head.position.y = 0.85; // Raised to accommodate neck
@@ -242,23 +253,27 @@ export class Character extends Entity {
       // Shoulder joint (small sphere)
       const shoulderJointGeometry = new THREE.SphereGeometry(0.12, 8, 8);
       const shoulderJoint = new THREE.Mesh(shoulderJointGeometry, armMaterial);
+      shoulderJoint.castShadow = true;
       
       // Upper arm
       const upperArmGeometry = new THREE.BoxGeometry(0.2, 0.3, 0.2);
       const upperArm = new THREE.Mesh(upperArmGeometry, armMaterial);
       upperArm.position.y = -0.15;
+      upperArm.castShadow = true;
       shoulderJoint.add(upperArm);
       
       // Elbow joint (smaller sphere) - positioned at the end of upper arm
       const elbowJointGeometry = new THREE.SphereGeometry(0.1, 8, 8);
       const elbowJoint = new THREE.Mesh(elbowJointGeometry, armMaterial);
       elbowJoint.position.y = -0.15; // Half the height of upper arm
+      elbowJoint.castShadow = true;
       upperArm.add(elbowJoint);
       
       // Forearm - positioned at center of elbow joint
       const forearmGeometry = new THREE.BoxGeometry(0.18, 0.25, 0.18);
       const forearm = new THREE.Mesh(forearmGeometry, armMaterial);
       forearm.position.y = -0.125; // Half the height of forearm
+      forearm.castShadow = true;
       elbowJoint.add(forearm);
 
       // Hand
@@ -270,6 +285,7 @@ export class Character extends Entity {
       });
       const hand = new THREE.Mesh(handGeometry, handMaterial);
       hand.position.y = -0.2;
+      hand.castShadow = true;
       forearm.add(hand);
 
       // Add yellow outlines
@@ -291,6 +307,7 @@ export class Character extends Entity {
             yellowMaterial
           );
           edge.position.set(x, 0, z);
+          edge.castShadow = true;
           upperArmEdges.add(edge);
         }
       }
@@ -302,6 +319,7 @@ export class Character extends Entity {
             yellowMaterial
           );
           edge.position.set(0, y, z);
+          edge.castShadow = true;
           upperArmEdges.add(edge);
         }
       }
@@ -317,6 +335,7 @@ export class Character extends Entity {
             yellowMaterial
           );
           edge.position.set(x, 0, z);
+          edge.castShadow = true;
           forearmEdges.add(edge);
         }
       }
@@ -328,6 +347,7 @@ export class Character extends Entity {
             yellowMaterial
           );
           edge.position.set(0, y, z);
+          edge.castShadow = true;
           forearmEdges.add(edge);
         }
       }
@@ -359,23 +379,35 @@ export class Character extends Entity {
       const thighGeometry = new THREE.BoxGeometry(0.25, 0.3, 0.25);
       const thigh = new THREE.Mesh(thighGeometry, legMaterial);
       thigh.position.y = -0.15;
+      thigh.castShadow = true;
 
       // Calf
       const calfGeometry = new THREE.BoxGeometry(0.2, 0.25, 0.2);
       const calf = new THREE.Mesh(calfGeometry, legMaterial);
       calf.position.y = -0.25;
+      calf.castShadow = true;
       thigh.add(calf);
 
-      // Boot
-      const bootGeometry = new THREE.BoxGeometry(0.25, 0.15, 0.3);
+      // Boot - slightly larger than calf and positioned with small gap
+      const bootGeometry = new THREE.BoxGeometry(0.26, 0.18, 0.32); // Made slightly taller
       const bootMaterial = new THREE.MeshStandardMaterial({
         color: 0x32CD32, // Lime green boots
         roughness: 0.7,
         metalness: 0.2
       });
       const boot = new THREE.Mesh(bootGeometry, bootMaterial);
-      boot.position.set(0, -0.15, 0.05);
+      // Position boot slightly higher to create overlap with calf, and more forward to prevent z-fighting
+      boot.position.set(0, -0.15, 0.07);
+      boot.castShadow = true;
       calf.add(boot);
+
+      // Add a thin black "rim" at the top of the boot to hide any z-fighting
+      const bootRimGeometry = new THREE.CylinderGeometry(0.13, 0.13, 0.02, 8);
+      const bootRim = new THREE.Mesh(bootRimGeometry, legMaterial);
+      bootRim.rotation.x = Math.PI / 2;
+      bootRim.position.set(0, -0.06, 0.07);
+      bootRim.castShadow = true;
+      calf.add(bootRim);
 
       leg.add(thigh);
       leg.position.set(sign * 0.25, 0, 0);
